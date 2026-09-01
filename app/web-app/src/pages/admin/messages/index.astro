@@ -1,0 +1,102 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Card from '../../../components/ui/Card.astro';
+import Button from '../../../components/ui/Button.astro';
+import { env } from 'cloudflare:workers';
+
+const db = env.DB;
+let messages: any[] = [];
+let errorMsg = '';
+
+if (Astro.request.method === 'POST') {
+  try {
+    const data = await Astro.request.formData();
+    const action = data.get('action');
+    const id = data.get('id');
+
+    if (action === 'delete' && id) {
+      await db.prepare("DELETE FROM contact_messages WHERE id = ?").bind(id).run();
+    }
+  } catch (err) {
+    errorMsg = 'Error processing request.';
+  }
+}
+
+try {
+  const { results } = await db.prepare("SELECT * FROM contact_messages ORDER BY created_at DESC").all();
+  messages = results;
+} catch (err) {
+  errorMsg = 'Failed to load messages.';
+}
+---
+
+<AdminLayout title="Contact Messages">
+  <div class="admin-header">
+    <h1>Contact Messages</h1>
+  </div>
+
+  {errorMsg && <div style="color: red; margin-bottom: 1rem;">{errorMsg}</div>}
+
+  <Card>
+    <div style="overflow-x: auto;">
+      <table style="width: 100%; text-align: left; border-collapse: collapse;">
+        <thead>
+          <tr style="border-bottom: 1px solid rgba(33, 33, 33, 0.1);">
+            <th style="padding: 1rem;">Name</th>
+            <th style="padding: 1rem;">Email</th>
+            <th style="padding: 1rem;">Subject</th>
+            <th style="padding: 1rem;">Status</th>
+            <th style="padding: 1rem;">Date</th>
+            <th style="padding: 1rem; text-align: right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {messages.length === 0 ? (
+            <tr>
+              <td colspan="6" style="padding: 2rem; text-align: center; color: var(--text-secondary);">No messages found.</td>
+            </tr>
+          ) : (
+            messages.map(msg => (
+              <tr style="border-bottom: 1px solid rgba(33, 33, 33, 0.05);">
+                <td style="padding: 1rem;">{msg.name}</td>
+                <td style="padding: 1rem;">{msg.email}</td>
+                <td style="padding: 1rem;">{msg.subject}</td>
+                <td style="padding: 1rem;">
+                  <span style={`padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem; background: ${msg.status === 'unread' ? 'rgba(255, 119, 89, 0.1)' : 'rgba(33, 33, 33, 0.1)'}; color: ${msg.status === 'unread' ? 'var(--signal-coral)' : 'var(--tf-graphite)'};`}>
+                    {msg.status.toUpperCase()}
+                  </span>
+                </td>
+                <td style="padding: 1rem;">{new Date(msg.created_at).toLocaleDateString()}</td>
+                <td style="padding: 1rem; text-align: right; display: flex; gap: 0.5rem; justify-content: flex-end;">
+                  <Button href={`/admin/messages/${msg.id}`} variant="outline" size="sm">View</Button>
+                  <form method="POST" style="margin: 0;" onsubmit="return confirm('Delete this message?');">
+                    <input type="hidden" name="action" value="delete" />
+                    <input type="hidden" name="id" value={msg.id} />
+                    <Button type="submit" variant="danger" size="sm">Delete</Button>
+                  </form>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  </Card>
+</AdminLayout>
+
+<style>
+  .admin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    gap: 1rem;
+  }
+  
+  @media (max-width: 768px) {
+    .admin-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+</style>

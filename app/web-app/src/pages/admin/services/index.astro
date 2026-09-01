@@ -1,0 +1,97 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Card from '../../../components/ui/Card.astro';
+import Button from '../../../components/ui/Button.astro';
+import { env } from 'cloudflare:workers';
+
+const db = env.DB;
+let services: any[] = [];
+let errorMsg = '';
+
+if (Astro.request.method === 'POST') {
+  try {
+    const data = await Astro.request.formData();
+    const action = data.get('action');
+    const id = data.get('id');
+
+    if (action === 'delete' && id) {
+      await db.prepare("DELETE FROM services WHERE id = ?").bind(id).run();
+    }
+  } catch (err) {
+    errorMsg = 'Error deleting service.';
+  }
+}
+
+try {
+  const { results } = await db.prepare("SELECT * FROM services ORDER BY id DESC").all();
+  services = results;
+} catch (err) {
+  errorMsg = 'Failed to load services.';
+}
+---
+
+<AdminLayout title="Manage Services">
+  <div class="admin-header">
+    <h1>Manage Services</h1>
+    <Button href="/admin/services/create" variant="primary">Add New Service</Button>
+  </div>
+
+  {errorMsg && <div style="color: red; margin-bottom: 1rem;">{errorMsg}</div>}
+
+  <Card>
+    <div style="overflow-x: auto;">
+      <table style="width: 100%; text-align: left; border-collapse: collapse;">
+        <thead>
+          <tr style="border-bottom: 1px solid rgba(33, 33, 33, 0.1);">
+            <th style="padding: 1rem;">Icon</th>
+            <th style="padding: 1rem;">Name</th>
+            <th style="padding: 1rem;">Slug</th>
+            <th style="padding: 1rem;">Status</th>
+            <th style="padding: 1rem; text-align: right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {services.length === 0 ? (
+            <tr>
+              <td colspan="5" style="padding: 2rem; text-align: center; color: var(--text-secondary);">No services found.</td>
+            </tr>
+          ) : (
+            services.map(service => (
+              <tr style="border-bottom: 1px solid rgba(33, 33, 33, 0.05);">
+                <td style="padding: 1rem; font-size: 1.5rem;"><i class={`bx ${service.icon}`}></i></td>
+                <td style="padding: 1rem; font-weight: 600;">{service.name}</td>
+                <td style="padding: 1rem;">{service.slug}</td>
+                <td style="padding: 1rem;">{service.status}</td>
+                <td style="padding: 1rem; text-align: right; display: flex; gap: 0.5rem; justify-content: flex-end;">
+                  <Button href={`/admin/services/edit?id=${service.id}`} variant="outline" size="sm">Edit</Button>
+                  <form method="POST" style="margin: 0;" onsubmit="return confirm('Delete this service?');">
+                    <input type="hidden" name="action" value="delete" />
+                    <input type="hidden" name="id" value={service.id} />
+                    <Button type="submit" variant="danger" size="sm">Delete</Button>
+                  </form>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  </Card>
+</AdminLayout>
+
+<style>
+  .admin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    gap: 1rem;
+  }
+  
+  @media (max-width: 768px) {
+    .admin-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+</style>

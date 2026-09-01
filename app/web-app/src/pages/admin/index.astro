@@ -1,0 +1,120 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Card from '../../components/ui/Card.astro';
+import Button from '../../components/ui/Button.astro';
+import { env } from 'cloudflare:workers';
+
+const db = env.DB;
+
+let stats = {
+  totalApps: 0,
+  totalDownloads: 0,
+  unreadMessages: 0
+};
+
+try {
+  const appsCount = await db.prepare("SELECT COUNT(*) as count FROM apps").first();
+  const downloads = await db.prepare("SELECT SUM(downloads) as total FROM apps").first();
+  const msgsCount = await db.prepare("SELECT COUNT(*) as count FROM contact_messages WHERE status = 'unread'").first();
+
+  stats.totalApps = (appsCount?.count as number) || 0;
+  stats.totalDownloads = (downloads?.total as number) || 0;
+  stats.unreadMessages = (msgsCount?.count as number) || 0;
+} catch (err) {
+  console.error("Dashboard stats error:", err);
+}
+---
+
+<AdminLayout title="Dashboard">
+  <div class="admin-header">
+    <h1>Dashboard Overview</h1>
+  </div>
+
+  <div class="stats-grid">
+    <Card>
+      <div class="stat-card">
+        <div class="stat-icon" style="background: rgba(33, 33, 33, 0.1); color: var(--tf-graphite);">
+          <i class='bx bx-grid-alt'></i>
+        </div>
+        <div class="stat-info">
+          <h3>Total Apps</h3>
+          <p class="stat-value">{stats.totalApps}</p>
+        </div>
+      </div>
+    </Card>
+
+    <Card>
+      <div class="stat-card">
+        <div class="stat-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+          <i class='bx bx-download'></i>
+        </div>
+        <div class="stat-info">
+          <h3>Total Downloads</h3>
+          <p class="stat-value">{stats.totalDownloads.toLocaleString()}</p>
+        </div>
+      </div>
+    </Card>
+
+    <Card>
+      <div class="stat-card">
+        <div class="stat-icon" style="background: rgba(255, 119, 89, 0.1); color: var(--signal-coral);">
+          <i class='bx bx-envelope'></i>
+        </div>
+        <div class="stat-info">
+          <h3>Unread Messages</h3>
+          <p class="stat-value">{stats.unreadMessages}</p>
+        </div>
+      </div>
+    </Card>
+  </div>
+  
+  <div class="quick-actions" style="margin-top: 3rem;">
+    <h2>Quick Links</h2>
+    <div style="display: flex; gap: 1rem; margin-top: 1rem; flex-wrap: wrap;">
+      <Button href="/admin/apps" variant="outline">Manage Apps</Button>
+      <Button href="/admin/messages" variant="outline">View Messages</Button>
+      <Button href="/admin/settings" variant="outline">Site Settings</Button>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  .admin-header {
+    margin-bottom: 2rem;
+  }
+  
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+  }
+  
+  .stat-card {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+  
+  .stat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+  }
+  
+  .stat-info h3 {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    margin: 0;
+  }
+  
+  .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--text-primary);
+  }
+</style>

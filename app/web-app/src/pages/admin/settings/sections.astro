@@ -1,0 +1,372 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Button from '../../../components/ui/Button.astro';
+import Card from '../../../components/ui/Card.astro';
+
+import { env } from "cloudflare:workers";
+const db = env.DB;
+
+let sections: any[] = [];
+let successMsg = "";
+let errorMsg = "";
+
+if (Astro.request.method === 'POST') {
+  try {
+    const data = await Astro.request.formData();
+    const action = data.get('action')?.toString();
+    const sectionId = data.get('id')?.toString();
+
+    if (action === 'toggle_status') {
+      const currentStatus = data.get('current_status')?.toString() === '1' ? 0 : 1;
+      await db.prepare(`UPDATE page_sections SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(currentStatus, sectionId).run();
+      successMsg = "Section visibility updated.";
+    } else if (action === 'update_order') {
+      const newOrder = data.get('display_order')?.toString();
+      await db.prepare(`UPDATE page_sections SET display_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(newOrder, sectionId).run();
+      successMsg = "Section order updated.";
+    } else if (action === 'update_content') {
+      // Reconstruct JSON from dynamic fields
+      const formEntries = Array.from(data.entries());
+      const contentObj: Record<string, string> = {};
+      formEntries.forEach(([key, value]) => {
+        if (key.startsWith('content_')) {
+          const contentKey = key.replace('content_', '');
+          contentObj[contentKey] = value.toString();
+        }
+      });
+      await db.prepare(`UPDATE page_sections SET content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(JSON.stringify(contentObj), sectionId).run();
+      successMsg = "Section content updated.";
+    } else if (action === 'restore_default') {
+      await db.prepare(`UPDATE page_sections SET content = default_content, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(sectionId).run();
+      successMsg = "Section restored to default content.";
+    }
+  } catch (err: any) {
+    console.error("Failed to update section", err);
+    errorMsg = `Failed to update section. Error: ${err.message}`;
+  }
+}
+
+try {
+  const result = await db.prepare(`SELECT * FROM page_sections ORDER BY display_order ASC`).all();
+  sections = result.results || [];
+} catch (e) {
+  console.error("Failed to fetch page sections", e);
+}
+---
+
+<AdminLayout title="Home Page Sections">
+  <div class="sections-container">
+    {successMsg && <div class="alert alert-success">{successMsg}</div>}
+    {errorMsg && <div class="alert alert-error">{errorMsg}</div>}
+
+    <Card title="Manage Page Sections">
+      <p class="section-desc">Control the visibility, order, and text content of the sections on the home page.</p>
+      
+      <div class="sections-list">
+        {sections.map((section: any) => {
+          let content = {};
+          try {
+            content = JSON.parse(section.content || '{}');
+          } catch (e) {
+            console.error("Error parsing section content JSON", e);
+          }
+          const contentKeys = Object.keys(content);
+
+          return (
+            <div class="section-item">
+              <div class="section-header">
+                <div class="section-info">
+                  <h3>{section.name} <span class="badge">{section.identifier}</span></h3>
+                  <span class={`status-badge ${section.is_active ? 'active' : 'inactive'}`}>
+                    {section.is_active ? 'Visible' : 'Hidden'}
+                  </span>
+                </div>
+                
+                <div class="section-actions">
+                  <form method="POST" class="inline-form">
+                    <input type="hidden" name="action" value="update_order" />
+                    <input type="hidden" name="id" value={section.id} />
+                    <input type="number" name="display_order" value={section.display_order} class="order-input" min="0" title="Display Order" />
+                    <button type="submit" class="btn-icon" title="Save Order"><i class='bx bx-save'></i></button>
+                  </form>
+
+                  <form method="POST" class="inline-form">
+                    <input type="hidden" name="action" value="toggle_status" />
+                    <input type="hidden" name="id" value={section.id} />
+                    <input type="hidden" name="current_status" value={section.is_active} />
+                    <button type="submit" class={`btn-toggle ${section.is_active ? 'hide-btn' : 'show-btn'}`}>
+                      {section.is_active ? 'Hide' : 'Show'}
+                    </button>
+                  </form>
+                  
+                  <button type="button" class="btn-toggle edit-btn" onclick={`document.getElementById('edit-form-${section.id}').classList.toggle('hidden')`}>
+                    Edit Content
+                  </button>
+                </div>
+              </div>
+              
+              <!-- Edit Content Form (Hidden by default) -->
+              <div id={`edit-form-${section.id}`} class="edit-content-container hidden">
+                <form method="POST" class="content-form">
+                  <input type="hidden" name="action" value="update_content" />
+                  <input type="hidden" name="id" value={section.id} />
+                  
+                  <div class="form-grid">
+                    {contentKeys.map((key) => (
+                      <div class={`form-group ${['title', 'subtitle'].includes(key) ? 'full-width' : ''}`}>
+                        <label>{key.replace(/_/g, ' ').toUpperCase()}</label>
+                        {['title', 'subtitle'].includes(key) ? (
+                          <textarea name={`content_${key}`} rows="2">{content[key as keyof typeof content]}</textarea>
+                        ) : (
+                          <input type="text" name={`content_${key}`} value={content[key as keyof typeof content]} />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <div class="form-actions-flex">
+                    <Button type="submit" variant="primary">Save Content</Button>
+                  </div>
+                </form>
+
+                <form method="POST" class="restore-form" onsubmit="return confirm('Are you sure you want to restore the default content? This will overwrite your current changes.');">
+                  <input type="hidden" name="action" value="restore_default" />
+                  <input type="hidden" name="id" value={section.id} />
+                  <button type="submit" class="btn-link text-danger">Restore Default</button>
+                </form>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  </div>
+</AdminLayout>
+
+<style>
+  .section-desc {
+    color: #666;
+    font-size: 0.95rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .sections-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  
+  .section-item {
+    border: 1px solid rgba(0,0,0,0.1);
+    border-radius: 8px;
+    background: #fff;
+    overflow: hidden;
+  }
+  
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.25rem;
+    background: #f8f9fa;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  
+  .section-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  
+  .section-info h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .badge {
+    font-size: 0.75rem;
+    background: #e2e8f0;
+    color: #475569;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-weight: normal;
+  }
+  
+  .status-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 99px;
+    font-weight: 600;
+  }
+  
+  .status-badge.active {
+    background: #dcfce7;
+    color: #166534;
+  }
+  
+  .status-badge.inactive {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+  
+  .section-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  
+  .inline-form {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin: 0;
+  }
+  
+  .order-input {
+    width: 60px;
+    padding: 0.35rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    text-align: center;
+  }
+  
+  .btn-icon {
+    background: var(--tf-graphite);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  
+  .btn-icon:hover {
+    background: black;
+  }
+  
+  .btn-toggle {
+    padding: 0.4rem 0.75rem;
+    border-radius: 4px;
+    border: none;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .hide-btn {
+    background: #fff0f0;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+  }
+  .hide-btn:hover { background: #fee2e2; }
+  
+  .show-btn {
+    background: #f0fdf4;
+    color: #16a34a;
+    border: 1px solid #bbf7d0;
+  }
+  .show-btn:hover { background: #dcfce7; }
+  
+  .edit-btn {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+  }
+  .edit-btn:hover { background: #e2e8f0; }
+  
+  .edit-content-container {
+    padding: 1.5rem;
+    background: #fff;
+  }
+  
+  .hidden {
+    display: none;
+  }
+  
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  
+  .full-width {
+    grid-column: 1 / -1;
+  }
+  
+  label {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #555;
+  }
+  
+  input, textarea {
+    padding: 0.6rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-family: inherit;
+    width: 100%;
+  }
+  
+  input:focus, textarea:focus {
+    border-color: var(--signal-coral);
+    outline: none;
+  }
+  
+  .form-actions-flex {
+    display: flex;
+    justify-content: flex-start;
+    margin-bottom: 1rem;
+  }
+  
+  .restore-form {
+    border-top: 1px dashed #eee;
+    padding-top: 1rem;
+    display: flex;
+    justify-content: flex-end;
+  }
+  
+  .btn-link {
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-decoration: underline;
+    font-size: 0.85rem;
+  }
+  
+  .text-danger {
+    color: #dc2626;
+  }
+
+  .alert {
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 1.5rem;
+    font-weight: 500;
+  }
+  .alert-success {
+    background-color: rgba(16, 185, 129, 0.1);
+    color: #059669;
+    border: 1px solid #10b981;
+  }
+  .alert-error {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+    border: 1px solid #ef4444;
+  }
+</style>

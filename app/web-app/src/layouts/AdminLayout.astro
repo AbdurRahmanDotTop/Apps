@@ -1,0 +1,276 @@
+---
+import '../styles/global.css';
+
+export interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{title} | Admin Panel</title>
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Geist+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <!-- Boxicons -->
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  </head>
+  <body>
+    <div class="admin-wrapper" id="adminWrapper">
+      <!-- Overlay for mobile -->
+      <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+      <aside class="sidebar" id="adminSidebar">
+        <div class="brand">
+          <img src="/admin-logo-dark-bg.png" alt="Techily Fly Admin" class="admin-logo" />
+        </div>
+        <nav class="nav-menu">
+          <a href="/admin" class={`nav-item ${Astro.url.pathname === '/admin' ? 'active' : ''}`}>Dashboard</a>
+          <a href="/admin/apps" class={`nav-item ${Astro.url.pathname.startsWith('/admin/apps') && !Astro.url.pathname.startsWith('/admin/web-apps') ? 'active' : ''}`}>Apps</a>
+          <a href="/admin/web-apps" class={`nav-item ${Astro.url.pathname.startsWith('/admin/web-apps') ? 'active' : ''}`}>Web Apps</a>
+          <a href="/admin/tools" class={`nav-item ${Astro.url.pathname.startsWith('/admin/tools') ? 'active' : ''}`}>Tools</a>
+          <a href="/admin/categories" class={`nav-item ${Astro.url.pathname.startsWith('/admin/categories') ? 'active' : ''}`}>App Categories</a>
+          <a href="/admin/web-app-categories" class={`nav-item ${Astro.url.pathname.startsWith('/admin/web-app-categories') ? 'active' : ''}`}>Web App Categories</a>
+          <a href="/admin/tool-categories" class={`nav-item ${Astro.url.pathname.startsWith('/admin/tool-categories') ? 'active' : ''}`}>Tool Categories</a>
+          <a href="/admin/services" class={`nav-item ${Astro.url.pathname.startsWith('/admin/services') ? 'active' : ''}`}>Services</a>
+          <a href="/admin/messages" class={`nav-item ${Astro.url.pathname.startsWith('/admin/messages') ? 'active' : ''}`}>Messages</a>
+          <a href="/admin/settings" class={`nav-item ${Astro.url.pathname === '/admin/settings' ? 'active' : ''}`}>Settings</a>
+          <a href="/admin/settings/sections" class={`nav-item ${Astro.url.pathname.startsWith('/admin/settings/sections') ? 'active' : ''}`} style="padding-left: 2.5rem; font-size: 0.9em;">- Page Sections</a>
+          <a href="/admin/settings/menus" class={`nav-item ${Astro.url.pathname.startsWith('/admin/settings/menus') ? 'active' : ''}`} style="padding-left: 2.5rem; font-size: 0.9em;">- Menus</a>
+        </nav>
+        <div class="user-actions">
+          <a href="/admin/profile" class="profile-link">Profile</a>
+          <form action="/api/admin/logout" method="POST" class="logout-form">
+            <button type="submit" class="logout-btn">Logout</button>
+          </form>
+        </div>
+      </aside>
+      
+      <main class="admin-content">
+        <header class="top-bar">
+          <div class="mobile-header">
+            <button class="hamburger-btn" id="hamburgerBtn" aria-label="Toggle menu">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+              </svg>
+            </button>
+            <img src="/admin-logo-light-bg.png" alt="Techily Fly" class="mobile-logo" />
+          </div>
+          <h2>{title}</h2>
+        </header>
+        <div class="content-body">
+          <slot />
+        </div>
+      </main>
+    </div>
+
+    <script>
+      const hamburgerBtn = document.getElementById('hamburgerBtn');
+      const sidebarOverlay = document.getElementById('sidebarOverlay');
+      const adminWrapper = document.getElementById('adminWrapper');
+
+      function toggleSidebar() {
+        adminWrapper?.classList.toggle('sidebar-open');
+      }
+
+      hamburgerBtn?.addEventListener('click', toggleSidebar);
+      sidebarOverlay?.addEventListener('click', toggleSidebar);
+    </script>
+  </body>
+</html>
+
+<style>
+  body {
+    background-color: var(--cloud-surface);
+    margin: 0;
+  }
+  
+  .admin-wrapper {
+    display: flex;
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+  }
+  
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 40;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .sidebar {
+    width: 250px;
+    background-color: var(--tf-graphite);
+    color: var(--cloud-surface);
+    display: flex;
+    flex-direction: column;
+    z-index: 50;
+    transition: transform 0.3s ease;
+    flex-shrink: 0;
+  }
+  
+  .brand {
+    padding: 1.5rem;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  
+  .admin-logo {
+    max-width: 100%;
+    height: 40px;
+    object-fit: contain;
+  }
+  
+  .nav-menu {
+    display: flex;
+    flex-direction: column;
+    padding: 1rem 0;
+    flex: 1;
+    overflow-y: auto;
+  }
+  
+  .nav-menu a {
+    color: rgba(250, 250, 250, 0.7);
+    padding: 0.75rem 1.5rem;
+    text-decoration: none;
+    transition: all 0.2s;
+  }
+  
+  .nav-menu a:hover, .nav-menu a.active {
+    color: var(--cloud-surface);
+    background-color: rgba(255, 255, 255, 0.05);
+    border-left: 3px solid var(--signal-coral);
+  }
+  
+  .user-actions {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .profile-link, .logout-btn {
+    color: rgba(250, 250, 250, 0.7);
+    text-decoration: none;
+    font-family: var(--font-brand);
+    font-size: 1rem;
+    background: transparent;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    padding: 0.25rem 0;
+  }
+  
+  .profile-link:hover, .logout-btn:hover {
+    color: var(--signal-coral);
+  }
+  
+  .admin-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  
+  .top-bar {
+    background-color: #fff;
+    padding: 1rem 2rem;
+    border-bottom: 1px solid rgba(33, 33, 33, 0.1);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  
+  .top-bar h2 {
+    margin: 0;
+    font-size: 1.25rem;
+  }
+
+  .mobile-header {
+    display: none;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .hamburger-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--tf-graphite);
+  }
+
+  .mobile-logo {
+    height: 32px;
+    object-fit: contain;
+  }
+  
+  .content-body {
+    padding: 2rem;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  @media (max-width: 768px) {
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      transform: translateX(-100%);
+    }
+
+    .sidebar-open .sidebar {
+      transform: translateX(0);
+    }
+
+    .sidebar-open .sidebar-overlay {
+      display: block;
+      opacity: 1;
+    }
+
+    .mobile-header {
+      display: flex;
+      width: 100%;
+      justify-content: flex-start;
+    }
+    
+    .mobile-logo {
+      margin-left: auto;
+    }
+
+    .top-bar {
+      padding: 1rem;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+    
+    .top-bar h2 {
+      padding-left: 0.5rem;
+    }
+
+    .content-body {
+      padding: 1rem;
+    }
+  }
+</style>

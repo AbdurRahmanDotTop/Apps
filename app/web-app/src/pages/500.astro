@@ -1,0 +1,107 @@
+---
+import PublicLayout from '../layouts/PublicLayout.astro';
+import Button from '../components/ui/Button.astro';
+
+interface Props {
+  error: unknown;
+}
+
+const { error } = Astro.props;
+---
+
+<PublicLayout title="500: Server Error">
+  <section class="error-section">
+    <div class="container" style="text-align: center;">
+      <div class="error-content">
+        <h1 class="error-code">500</h1>
+        <h2 class="error-title">Internal Server Error</h2>
+        <p class="error-message">
+          Something went wrong on our end. We're actively looking into it. Please try again later.
+        </p>
+        
+        {import.meta.env.DEV && error && (
+          <div class="error-details">
+            <p><strong>Error Detail (visible in DEV mode only):</strong></p>
+            <pre>{error instanceof Error ? error.message : String(error)}</pre>
+          </div>
+        )}
+
+        <div class="error-actions">
+          <Button href="/" variant="primary">Return to Homepage</Button>
+          <Button href="/contact" variant="outline">Contact Support</Button>
+        </div>
+      </div>
+    </div>
+  </section>
+</PublicLayout>
+
+<style>
+  .error-section {
+    padding: 8rem 0;
+    min-height: 70vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .error-content {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 3rem;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(33, 33, 33, 0.05);
+    text-align: center;
+  }
+
+  .error-code {
+    font-size: 8rem;
+    line-height: 1;
+    margin-bottom: 1rem;
+    background: linear-gradient(135deg, var(--tf-graphite), #555);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .error-title {
+    font-size: 2rem;
+    margin-bottom: 1.5rem;
+    color: var(--tf-graphite);
+  }
+
+  .error-message {
+    font-size: 1.125rem;
+    color: rgba(33, 33, 33, 0.7);
+    margin-bottom: 2.5rem;
+  }
+  
+  .error-details {
+    background: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+    text-align: left;
+    font-size: 0.875rem;
+    overflow-x: auto;
+  }
+
+  .error-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  @media (max-width: 768px) {
+    .error-code {
+      font-size: 5rem;
+    }
+    .error-title {
+      font-size: 1.5rem;
+    }
+    .error-content {
+      padding: 2rem 1.5rem;
+    }
+  }
+</style>

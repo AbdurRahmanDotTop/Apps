@@ -1,0 +1,524 @@
+---
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import Button from '../../../../components/ui/Button.astro';
+import Card from '../../../../components/ui/Card.astro';
+
+import { env } from "cloudflare:workers";
+const db = env.DB;
+
+const { menuId } = Astro.params;
+
+let menu: any = null;
+let items: any[] = [];
+let successMsg = "";
+let errorMsg = "";
+
+// Helper to build hierarchy
+const buildTree = (allItems: any[]) => {
+  const itemMap = new Map();
+  const rootItems: any[] = [];
+  
+  allItems.forEach(item => {
+    item.children = [];
+    itemMap.set(item.id, item);
+  });
+  
+  allItems.forEach(item => {
+    if (item.parent_id) {
+      const parent = itemMap.get(item.parent_id);
+      if (parent) {
+        parent.children.push(item);
+      } else {
+        rootItems.push(item); // Fallback if parent missing
+      }
+    } else {
+      rootItems.push(item);
+    }
+  });
+  
+  return rootItems;
+};
+
+if (Astro.request.method === 'POST') {
+  try {
+    const data = await Astro.request.formData();
+    const action = data.get('action')?.toString();
+    const itemId = data.get('id')?.toString();
+
+    if (action === 'create_item') {
+      const label = data.get('label')?.toString();
+      const url = data.get('url')?.toString();
+      const parent_id = data.get('parent_id')?.toString() || null;
+      const target = data.get('target')?.toString() || '_self';
+      
+      await db.prepare(`INSERT INTO menu_items (menu_id, parent_id, label, url, target) VALUES (?, ?, ?, ?, ?)`).bind(menuId, parent_id, label, url, target).run();
+      successMsg = "Menu item added successfully.";
+      
+    } else if (action === 'delete_item') {
+      await db.prepare(`DELETE FROM menu_items WHERE id = ? AND menu_id = ?`).bind(itemId, menuId).run();
+      successMsg = "Menu item deleted successfully.";
+      
+    } else if (action === 'update_order') {
+      const newOrder = data.get('display_order')?.toString();
+      await db.prepare(`UPDATE menu_items SET display_order = ? WHERE id = ? AND menu_id = ?`).bind(newOrder, itemId, menuId).run();
+      successMsg = "Order updated.";
+      
+    } else if (action === 'update_item') {
+      const label = data.get('label')?.toString();
+      const url = data.get('url')?.toString();
+      const parent_id = data.get('parent_id')?.toString() || null;
+      const target = data.get('target')?.toString() || '_self';
+      const status = data.get('status')?.toString() || 'active';
+      
+      // Prevent self-parenting
+      if (parent_id === itemId) {
+        throw new Error("An item cannot be its own parent.");
+      }
+      
+      await db.prepare(`UPDATE menu_items SET label = ?, url = ?, parent_id = ?, target = ?, status = ? WHERE id = ? AND menu_id = ?`)
+        .bind(label, url, parent_id, target, status, itemId, menuId).run();
+      successMsg = "Menu item updated.";
+    }
+  } catch (err: any) {
+    console.error("Failed to process menu item action", err);
+    errorMsg = `Failed to process action. Error: ${err.message}`;
+  }
+}
+
+try {
+  const menuResult = await db.prepare(`SELECT * FROM menus WHERE id = ?`).bind(menuId).first();
+  if (menuResult) {
+    menu = menuResult;
+    const itemsResult = await db.prepare(`SELECT * FROM menu_items WHERE menu_id = ? ORDER BY display_order ASC, id ASC`).bind(menuId).all();
+    items = itemsResult.results || [];
+  }
+} catch (e) {
+  console.error("Failed to fetch menu details", e);
+}
+
+if (!menu) {
+  return Astro.redirect('/admin/settings/menus');
+}
+
+const tree = buildTree(items);
+---
+
+<AdminLayout title={`Manage: ${menu.name}`}>
+  <div class="menu-items-container">
+    <div style="margin-bottom: 1.5rem;">
+      <a href="/admin/settings/menus" class="back-link"><i class='bx bx-arrow-back'></i> Back to Menus</a>
+    </div>
+
+    {successMsg && <div class="alert alert-success">{successMsg}</div>}
+    {errorMsg && <div class="alert alert-error">{errorMsg}</div>}
+
+    <div class="layout-grid">
+      <!-- Left Column: Menu Structure -->
+      <div class="left-col">
+        <Card title="Menu Structure">
+          <p class="text-muted" style="margin-bottom: 1.5rem;">Update the display order or delete items. To create a submenu, add a new item and select its parent.</p>
+          
+          <div class="tree-view">
+            {tree.length > 0 ? (
+              <ul class="item-list">
+                {tree.map(item => (
+                  <li class="list-item">
+                    <div class="item-row">
+                      <div class="item-info">
+                        <span class="item-label">{item.label}</span>
+                        <span class="item-url">{item.url}</span>
+                        {!item.status || item.status !== 'active' ? <span class="badge inactive">Hidden</span> : null}
+                      </div>
+                      <div class="item-actions">
+                        <form method="POST" class="inline-form">
+                          <input type="hidden" name="action" value="update_order" />
+                          <input type="hidden" name="id" value={item.id} />
+                          <input type="number" name="display_order" value={item.display_order} class="order-input" min="0" />
+                          <button type="submit" class="btn-icon" title="Save Order"><i class='bx bx-save'></i></button>
+                        </form>
+                        <button type="button" class="btn-icon-text" onclick={`openEditModal(${JSON.stringify(item)})`}><i class='bx bx-edit'></i></button>
+                        <form method="POST" class="inline-form" onsubmit="return confirm('Delete this item?');">
+                          <input type="hidden" name="action" value="delete_item" />
+                          <input type="hidden" name="id" value={item.id} />
+                          <button type="submit" class="btn-icon-text text-danger"><i class='bx bx-trash'></i></button>
+                        </form>
+                      </div>
+                    </div>
+                    
+                    {item.children && item.children.length > 0 && (
+                      <ul class="sub-item-list">
+                        {item.children.map((child: any) => (
+                          <li class="list-item">
+                            <div class="item-row">
+                              <div class="item-info">
+                                <span class="item-label">{child.label}</span>
+                                <span class="item-url">{child.url}</span>
+                                {!child.status || child.status !== 'active' ? <span class="badge inactive">Hidden</span> : null}
+                              </div>
+                              <div class="item-actions">
+                                <form method="POST" class="inline-form">
+                                  <input type="hidden" name="action" value="update_order" />
+                                  <input type="hidden" name="id" value={child.id} />
+                                  <input type="number" name="display_order" value={child.display_order} class="order-input" min="0" />
+                                  <button type="submit" class="btn-icon" title="Save Order"><i class='bx bx-save'></i></button>
+                                </form>
+                                <button type="button" class="btn-icon-text" onclick={`openEditModal(${JSON.stringify(child)})`}><i class='bx bx-edit'></i></button>
+                                <form method="POST" class="inline-form" onsubmit="return confirm('Delete this item?');">
+                                  <input type="hidden" name="action" value="delete_item" />
+                                  <input type="hidden" name="id" value={child.id} />
+                                  <button type="submit" class="btn-icon-text text-danger"><i class='bx bx-trash'></i></button>
+                                </form>
+                              </div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p class="empty-state">No items in this menu yet.</p>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      <!-- Right Column: Add Item Form -->
+      <div class="right-col">
+        <Card title="Add Menu Item">
+          <form method="POST" class="standard-form">
+            <input type="hidden" name="action" value="create_item" />
+            
+            <div class="form-group">
+              <label>Label</label>
+              <input type="text" name="label" required placeholder="e.g. About Us" />
+            </div>
+            
+            <div class="form-group">
+              <label>URL / Link</label>
+              <input type="text" name="url" required placeholder="/about or https://..." />
+            </div>
+            
+            <div class="form-group">
+              <label>Parent Menu (For Submenus)</label>
+              <select name="parent_id">
+                <option value="">-- None (Top Level) --</option>
+                {items.filter(i => !i.parent_id).map(i => (
+                  <option value={i.id}>{i.label}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label>Target</label>
+              <select name="target">
+                <option value="_self">Same Window (_self)</option>
+                <option value="_blank">New Window (_blank)</option>
+              </select>
+            </div>
+            
+            <div style="margin-top: 1rem;">
+              <Button type="submit" variant="primary">Add Item</Button>
+            </div>
+          </form>
+        </Card>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Item Modal -->
+  <div id="editItemModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="document.getElementById('editItemModal').style.display = 'none'">&times;</span>
+      <h2>Edit Menu Item</h2>
+      <form method="POST" class="standard-form" id="editItemForm">
+        <input type="hidden" name="action" value="update_item" />
+        <input type="hidden" name="id" id="edit_item_id" />
+        
+        <div class="form-group">
+          <label>Label</label>
+          <input type="text" name="label" id="edit_item_label" required />
+        </div>
+        
+        <div class="form-group">
+          <label>URL / Link</label>
+          <input type="text" name="url" id="edit_item_url" required />
+        </div>
+        
+        <div class="form-group">
+          <label>Parent Menu</label>
+          <select name="parent_id" id="edit_item_parent">
+            <option value="">-- None (Top Level) --</option>
+            {items.filter(i => !i.parent_id).map(i => (
+              <option value={i.id}>{i.label}</option>
+            ))}
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label>Target</label>
+          <select name="target" id="edit_item_target">
+            <option value="_self">Same Window (_self)</option>
+            <option value="_blank">New Window (_blank)</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label>Status</label>
+          <select name="status" id="edit_item_status">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+        
+        <div style="margin-top: 1rem;">
+          <Button type="submit" variant="primary">Save Changes</Button>
+        </div>
+      </form>
+    </div>
+  </div>
+</AdminLayout>
+
+<script is:inline>
+  function openEditModal(item) {
+    document.getElementById('edit_item_id').value = item.id;
+    document.getElementById('edit_item_label').value = item.label;
+    document.getElementById('edit_item_url').value = item.url;
+    document.getElementById('edit_item_parent').value = item.parent_id || '';
+    document.getElementById('edit_item_target').value = item.target || '_self';
+    document.getElementById('edit_item_status').value = item.status || 'active';
+    
+    // Disable self as parent
+    const parentSelect = document.getElementById('edit_item_parent');
+    for (let i = 0; i < parentSelect.options.length; i++) {
+      if (parentSelect.options[i].value == item.id) {
+        parentSelect.options[i].disabled = true;
+      } else {
+        parentSelect.options[i].disabled = false;
+      }
+    }
+    
+    document.getElementById('editItemModal').style.display = 'block';
+  }
+</script>
+
+<style>
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: #555;
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .back-link:hover { color: #000; }
+
+  .layout-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 2rem;
+  }
+
+  @media (max-width: 900px) {
+    .layout-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  
+  .item-list, .sub-item-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  
+  .sub-item-list {
+    padding-left: 2rem;
+    margin-top: 0.5rem;
+    border-left: 2px solid #eee;
+    margin-left: 1rem;
+  }
+  
+  .list-item {
+    margin-bottom: 0.75rem;
+  }
+  
+  .item-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: #f8f9fa;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+  }
+  
+  .item-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  
+  .item-label {
+    font-weight: 600;
+  }
+  
+  .item-url {
+    color: #64748b;
+    font-size: 0.85rem;
+    background: #fff;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    border: 1px solid #e2e8f0;
+  }
+  
+  .badge.inactive {
+    background: #fee2e2;
+    color: #991b1b;
+    font-size: 0.75rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+  }
+
+  .item-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .inline-form {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin: 0;
+  }
+  
+  .order-input {
+    width: 50px;
+    padding: 0.25rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    text-align: center;
+  }
+  
+  .btn-icon {
+    background: var(--tf-graphite);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  
+  .btn-icon:hover {
+    background: black;
+  }
+  
+  .btn-icon-text {
+    background: none;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 0.25rem;
+  }
+  .btn-icon-text:hover { color: #000; }
+  .text-danger { color: #dc2626; }
+  .text-danger:hover { color: #991b1b; }
+
+  /* Standard Forms */
+  .standard-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  
+  .form-group label {
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+  
+  .form-group input, .form-group select {
+    padding: 0.6rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-family: inherit;
+    width: 100%;
+  }
+
+  .empty-state {
+    padding: 2rem;
+    text-align: center;
+    color: #888;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border: 1px dashed #cbd5e1;
+  }
+
+  /* Modal Styles */
+  .modal {
+    display: none; 
+    position: fixed; 
+    z-index: 1000; 
+    left: 0;
+    top: 0;
+    width: 100%; 
+    height: 100%; 
+    overflow: auto; 
+    background-color: rgba(0,0,0,0.5); 
+  }
+
+  .modal-content {
+    background-color: #fefefe;
+    margin: 5% auto; 
+    padding: 2rem;
+    border: 1px solid #888;
+    width: 90%;
+    max-width: 500px;
+    border-radius: 8px;
+    position: relative;
+  }
+
+  .close {
+    color: #aaa;
+    position: absolute;
+    top: 1rem;
+    right: 1.5rem;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+
+  .close:hover,
+  .close:focus {
+    color: black;
+    text-decoration: none;
+  }
+
+  .alert {
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 1.5rem;
+    font-weight: 500;
+  }
+  .alert-success {
+    background-color: rgba(16, 185, 129, 0.1);
+    color: #059669;
+    border: 1px solid #10b981;
+  }
+  .alert-error {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+    border: 1px solid #ef4444;
+  }
+</style>

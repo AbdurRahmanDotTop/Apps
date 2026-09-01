@@ -1,0 +1,66 @@
+---
+export interface Props {
+  variant?: "success" | "warning" | "danger" | "info" | "default" | "outline";
+  class?: string;
+}
+
+const { variant = "default", class: className = "" } = Astro.props;
+
+const variantStyles = {
+  default: "bg-[var(--tf-graphite)] text-[var(--cloud-surface)]",
+  success: "bg-green-100 text-green-800 border border-green-200",
+  warning: "bg-yellow-100 text-yellow-800 border border-yellow-200",
+  danger: "bg-red-100 text-red-800 border border-red-200",
+  info: "bg-blue-100 text-blue-800 border border-blue-200",
+  outline: "bg-transparent text-[var(--tf-graphite)] border border-[var(--tf-graphite)]"
+};
+---
+
+<span class={`badge ${variant} ${className}`}>
+  <slot />
+</span>
+
+<style>
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-family: var(--font-brand);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  
+  .badge.default {
+    background-color: var(--tf-graphite);
+    color: var(--cloud-surface);
+  }
+  
+  .badge.success {
+    background-color: #e6f6f4;
+    color: #16A394;
+  }
+  
+  .badge.warning {
+    background-color: #fef7e9;
+    color: #F4B740;
+  }
+  
+  .badge.danger {
+    background-color: #fceceb;
+    color: #E5484D;
+  }
+  
+  .badge.info {
+    background-color: #eff2fe;
+    color: #5B7CFA;
+  }
+  
+  .badge.outline {
+    background-color: transparent;
+    color: var(--tf-graphite);
+    border: 1px solid var(--tf-graphite);
+  }
+</style>

@@ -1,0 +1,667 @@
+---
+import PublicLayout from '../layouts/PublicLayout.astro';
+import Button from '../components/ui/Button.astro';
+import { env } from 'cloudflare:workers';
+
+const db = env.DB;
+
+let siteSettings: any = { site_name: 'Techily Fly', tagline: 'Serious technology. Intelligent systems. Human energy.' };
+let apps: any[] = [];
+let webApps: any[] = [];
+let tools: any[] = [];
+let services: any[] = [];
+let pageSections: any[] = [];
+
+try {
+  const sectionsRes = await db.prepare(`SELECT identifier, content, is_active FROM page_sections WHERE is_active = 1 ORDER BY display_order ASC`).all();
+  pageSections = sectionsRes.results || [];
+  
+  const settingsRes = await db.prepare(`SELECT * FROM website_settings LIMIT 1`).first();
+  if (settingsRes) {
+    siteSettings = { ...siteSettings, ...settingsRes };
+  }
+  
+  const resultApps = await db.prepare("SELECT * FROM apps WHERE status = 'published' AND is_featured = 1 LIMIT 6").all();
+  apps = resultApps.results || [];
+  
+  const resultWebApps = await db.prepare("SELECT * FROM web_apps WHERE status = 'published' AND is_featured = 1 LIMIT 6").all();
+  webApps = resultWebApps.results || [];
+  
+  const resultTools = await db.prepare("SELECT * FROM tools WHERE status = 'published' AND is_featured = 1 LIMIT 6").all();
+  tools = resultTools.results || [];
+  
+  const resultServices = await db.prepare("SELECT * FROM services WHERE status = 'active' LIMIT 3").all();
+  services = resultServices.results || [];
+} catch (e) {
+  console.error("Failed to fetch data from D1", e);
+}
+
+const cleanDesc = (desc: any) => {
+  if (!desc) return '';
+  return String(desc)
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\r\n/g, ' ')
+    .replace(/\n/g, ' ')
+    .replace(/#/g, '')
+    .replace(/🌟/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const getSection = (id: string) => {
+  const sec = pageSections.find(s => s.identifier === id);
+  if (!sec || !sec.is_active) return null;
+  try {
+    return JSON.parse(sec.content);
+  } catch (e) {
+    return null;
+  }
+};
+
+const heroSec = getSection('hero');
+const featAppsSec = getSection('featured_apps');
+const featWebAppsSec = getSection('featured_web_apps');
+const featToolsSec = getSection('featured_tools');
+const servicesSec = getSection('services');
+const ctaSec = getSection('cta');
+---
+
+<PublicLayout title="Home" description={siteSettings.tagline}>
+  <div class="home-container">
+    <!-- Hero Section -->
+    {heroSec && (
+    <section class="hero-section">
+      <div class="hero-content">
+        <h1 class="hero-title" set:html={heroSec.title}></h1>
+        <p class="hero-subtitle">
+          {heroSec.subtitle}
+        </p>
+        <div class="hero-actions">
+          {heroSec.button1_text && <Button href={heroSec.button1_url || "/apps"} variant="primary" class="hero-btn">{heroSec.button1_text}</Button>}
+          {heroSec.button2_text && <Button href={heroSec.button2_url || "/services"} variant="secondary" class="hero-btn">{heroSec.button2_text}</Button>}
+        </div>
+      </div>
+    </section>
+    )}
+
+    <!-- Featured Apps Section -->
+  {featAppsSec && (
+  <section class="content-section bg-surface">
+    <div class="container">
+      <div class="section-header text-center">
+        <h2>{featAppsSec.title}</h2>
+        <p>{featAppsSec.subtitle}</p>
+      </div>
+      <div class="grid-cards">
+        {apps.length > 0 ? (
+          apps.map(app => (
+            <a href={`/apps/${app.slug}`} class="app-card" style="text-decoration: none; color: inherit;">
+              {app.is_featured ? <div class="badge">Featured</div> : null}
+              <div class="app-card-header">
+                {app.logo_url && <img src={app.logo_url} alt={`${app.name} Logo`} class="app-logo" />}
+                <div class="app-info">
+                  <h3>{app.name}</h3>
+                </div>
+              </div>
+              <p class="app-desc" title={cleanDesc(app.description)}>
+                {cleanDesc(app.description).length > 100 
+                  ? cleanDesc(app.description).substring(0, 100) + '...' 
+                  : cleanDesc(app.description)}
+              </p>
+              <div class="app-actions" style="margin-top: 1.5rem; display: flex; gap: 0.75rem;">
+                <span class="btn btn-primary" style="flex: 1; text-align: center; width: 100%;">View Details</span>
+              </div>
+            </a>
+          ))
+        ) : (
+          <p class="text-center" style="grid-column: 1 / -1; color: var(--text-muted);">No featured apps available at the moment.</p>
+        )}
+      </div>
+      <div class="section-footer text-center" style="margin-top: 3.5rem;">
+        <Button href="/apps" variant="outline">Browse All Apps</Button>
+      </div>
+    </div>
+  </section>
+  )}
+
+  <!-- Featured Web Apps Section -->
+  {featWebAppsSec && (
+  <section class="content-section bg-surface-alt">
+    <div class="container">
+      <div class="section-header text-center">
+        <h2>{featWebAppsSec.title}</h2>
+        <p>{featWebAppsSec.subtitle}</p>
+      </div>
+      <div class="grid-cards">
+        {webApps.length > 0 ? (
+          webApps.map(app => (
+            <a href={`/web-apps/${app.slug}`} target="_self" class="app-card" style="text-decoration: none; color: inherit;">
+              {app.is_featured ? <div class="badge">Featured</div> : null}
+              <div class="app-card-header">
+                {app.logo_url && <img src={app.logo_url} alt={`${app.name} Logo`} class="app-logo" />}
+                <div class="app-info">
+                  <h3>{app.name}</h3>
+                </div>
+              </div>
+              <p class="app-desc" title={cleanDesc(app.description)}>
+                {cleanDesc(app.description).length > 100 
+                  ? cleanDesc(app.description).substring(0, 100) + '...' 
+                  : cleanDesc(app.description)}
+              </p>
+              <div class="app-actions" style="margin-top: 1.5rem; display: flex; gap: 0.75rem;">
+                <span class="btn btn-primary" style="flex: 1; text-align: center; width: 100%;">Explore Now <i class='bx bx-right-arrow-alt'></i></span>
+              </div>
+            </a>
+          ))
+        ) : (
+          <p class="text-center" style="grid-column: 1 / -1; color: var(--text-muted);">No featured web apps available at the moment.</p>
+        )}
+      </div>
+      <div class="section-footer text-center" style="margin-top: 3.5rem;">
+        <Button href="/web-apps" variant="outline">Browse All Web Apps</Button>
+      </div>
+    </div>
+  </section>
+  )}
+
+  <!-- Featured Tools Section -->
+  {featToolsSec && (
+  <section class="content-section bg-surface">
+    <div class="container">
+      <div class="section-header text-center">
+        <h2>{featToolsSec.title}</h2>
+        <p>{featToolsSec.subtitle}</p>
+      </div>
+      <div class="grid-cards">
+        {tools.length > 0 ? (
+          tools.map(tool => (
+            <a href={`/tools/${tool.slug}`} target="_self" class="app-card" style="text-decoration: none; color: inherit;">
+              {tool.is_featured ? <div class="badge">Featured</div> : null}
+              <div class="app-card-header">
+                {tool.logo_url && <img src={tool.logo_url} alt={`${tool.name} Logo`} class="app-logo" />}
+                <div class="app-info">
+                  <h3>{tool.name}</h3>
+                </div>
+              </div>
+              <p class="app-desc" title={cleanDesc(tool.description)}>
+                {cleanDesc(tool.description).length > 100 
+                  ? cleanDesc(tool.description).substring(0, 100) + '...' 
+                  : cleanDesc(tool.description)}
+              </p>
+              <div class="app-actions" style="margin-top: 1.5rem; display: flex; gap: 0.75rem;">
+                <span class="btn btn-primary" style="flex: 1; text-align: center; width: 100%;">Explore Now <i class='bx bx-right-arrow-alt'></i></span>
+              </div>
+            </a>
+          ))
+        ) : (
+          <p class="text-center" style="grid-column: 1 / -1; color: var(--text-muted);">No featured tools available at the moment.</p>
+        )}
+      </div>
+      <div class="section-footer text-center" style="margin-top: 3.5rem;">
+        <Button href="/tools" variant="outline">Browse All Tools</Button>
+      </div>
+    </div>
+  </section>
+  )}
+
+    <!-- Services Section -->
+    {servicesSec && (
+    <section class="content-section bg-surface">
+      <div class="section-header">
+        <h2 class="section-title">{servicesSec.title}</h2>
+        <p class="section-subtitle">{servicesSec.subtitle}</p>
+      </div>
+      
+      <div class="grid-cards services-grid">
+        {services.length > 0 ? (
+          services.map((service: any) => (
+            <a href={`/services/${service.slug}`} class="service-card" style="text-decoration: none; color: inherit; display: block;">
+              <div class="service-icon">
+                <i class={`bx ${service.icon}`}></i>
+              </div>
+              <h3>{service.name}</h3>
+              <p title={cleanDesc(service.description)}>{cleanDesc(service.description).length > 120 ? cleanDesc(service.description).substring(0, 120) + '...' : cleanDesc(service.description)}</p>
+              <span class="service-link">Learn More <i class='bx bx-right-arrow-alt'></i></span>
+            </a>
+          ))
+        ) : (
+          <p class="empty-state">No services found.</p>
+        )}
+      </div>
+    </section>
+    )}
+
+    <!-- CTA Section -->
+    {ctaSec && (
+    <section class="cta-section">
+      <div class="cta-content">
+        <h2>{ctaSec.title}</h2>
+        <p>{ctaSec.subtitle}</p>
+        <a href={ctaSec.button_url || "/contact"} class="btn-primary-large">{ctaSec.button_text || "Request a Quote"}</a>
+      </div>
+    </section>
+    )}
+  </div>
+</PublicLayout>
+
+<style>
+  /* Base Variables matching brand identity & Apple neatness */
+  :root {
+    --apple-gray: #f5f5f7;
+    --apple-dark: #1d1d1f;
+    --card-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+    --hover-shadow: 0 14px 40px rgba(0, 0, 0, 0.12);
+    --border-radius-lg: 24px;
+    --border-radius-md: 16px;
+    --border-radius-sm: 10px;
+  }
+
+  .home-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, var(--signal-coral), #ff4d4d);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Typography */
+  h1, h2, h3 {
+    letter-spacing: -0.03em;
+    color: var(--tf-graphite);
+    font-family: var(--font-brand);
+  }
+
+  /* Hero Section */
+  .hero-section {
+    padding: 6rem 2rem;
+    text-align: center;
+    background: linear-gradient(180deg, #ffffff 0%, var(--apple-gray) 100%);
+    border-radius: var(--border-radius-lg);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+  }
+  
+  .hero-content {
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .hero-title {
+    font-size: clamp(2.5rem, 5vw, 4rem);
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 1.5rem;
+  }
+
+  .hero-subtitle {
+    font-size: 1.25rem;
+    color: #555;
+    margin-bottom: 2.5rem;
+    line-height: 1.5;
+    font-weight: 400;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  
+  .hero-btn {
+    padding: 0.8rem 1.5rem;
+    font-size: 1.05rem;
+    border-radius: 99px; /* Pill shape for hero buttons */
+  }
+
+  /* General Sections */
+  .content-section {
+    padding: 5rem 2rem;
+    border-radius: var(--border-radius-lg);
+  }
+
+  .bg-surface {
+    background-color: var(--apple-gray);
+  }
+  
+  .bg-surface-alt {
+    background-color: #f4f7fa; /* Subtle light blue/grey for alternating sections */
+  }
+
+  .section-header {
+    text-align: center;
+    margin-bottom: 4rem;
+  }
+
+  .section-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+  }
+
+  .section-subtitle {
+    font-size: 1.15rem;
+    color: #666;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  .section-footer {
+    text-align: center;
+    margin-top: 3.5rem;
+  }
+
+  /* Grids */
+  .grid-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 2rem;
+  }
+  
+  .services-grid {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+
+  /* App Card */
+  .app-card {
+    background: #fff;
+    border-radius: var(--border-radius-md);
+    padding: 1.5rem;
+    box-shadow: var(--card-shadow);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    position: relative;
+    border: 1px solid rgba(0,0,0,0.04);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .app-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--hover-shadow);
+  }
+
+  .badge {
+    position: absolute;
+    top: 1.25rem;
+    right: 1.25rem;
+    background: rgba(255, 119, 89, 0.1);
+    color: var(--signal-coral);
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.25rem 0.75rem;
+    border-radius: 99px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .app-card-header {
+    display: flex;
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+    align-items: center;
+  }
+
+  .app-logo {
+    width: 72px;
+    height: 72px;
+    border-radius: var(--border-radius-sm);
+    object-fit: cover;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  }
+
+  .app-info h3 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.3rem;
+    padding-right: 4.5rem; /* Prevent overlap with absolute positioned Featured badge */
+    line-height: 1.3;
+  }
+
+  .app-category {
+    font-size: 0.9rem;
+    color: #888;
+    display: block;
+    margin-bottom: 0.4rem;
+    font-weight: 600;
+  }
+
+  .app-rating {
+    font-size: 0.95rem;
+    color: #f5a623;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-weight: 600;
+  }
+
+  .app-downloads {
+    color: #999;
+    font-size: 0.85rem;
+    font-weight: 400;
+  }
+
+  .app-desc {
+    font-size: 1rem;
+    color: #555;
+    line-height: 1.5;
+    margin-bottom: 1.5rem;
+    flex-grow: 1;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  .app-actions {
+    display: flex;
+    gap: 0.75rem;
+  }
+
+  /* Service Card */
+  .service-card {
+    background: #fff;
+    border-radius: var(--border-radius-md);
+    padding: 2.5rem 2rem;
+    box-shadow: var(--card-shadow);
+    transition: transform 0.3s ease;
+    border: 1px solid rgba(0,0,0,0.04);
+    text-align: center;
+  }
+
+  .service-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--hover-shadow);
+  }
+
+  .service-icon {
+    font-size: 3rem;
+    color: var(--signal-coral);
+    margin-bottom: 1.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 80px;
+    height: 80px;
+    background: rgba(255, 119, 89, 0.1);
+    border-radius: 50%;
+  }
+
+  .service-card h3 {
+    font-size: 1.35rem;
+    margin-bottom: 1rem;
+  }
+
+  .service-card p {
+    color: #666;
+    line-height: 1.6;
+    margin-bottom: 1.5rem;
+  }
+
+  .service-link {
+    color: var(--signal-coral);
+    font-weight: 600;
+    text-decoration: none;
+    font-size: 1rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    transition: opacity 0.2s;
+  }
+
+  .service-link:hover {
+    opacity: 0.8;
+  }
+
+  /* Buttons & Links */
+  .btn {
+    display: inline-block;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--border-radius-sm);
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.3s ease;
+  }
+  .btn-primary {
+    background: var(--signal-coral);
+    color: white;
+    box-shadow: 0 4px 10px rgba(255, 119, 89, 0.2);
+    border: none;
+    cursor: pointer;
+  }
+  .btn-primary:hover {
+    background: #ff5e40;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(255, 119, 89, 0.3);
+  }
+
+  .btn-outline {
+    display: inline-block;
+    padding: 0.75rem 1.5rem;
+    border: 2px solid var(--signal-coral);
+    border-radius: var(--border-radius-sm);
+    color: var(--signal-coral);
+    text-decoration: none;
+    font-weight: 700;
+    text-align: center;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    background: transparent;
+    box-shadow: 0 4px 6px rgba(255, 119, 89, 0.1);
+  }
+  
+  .btn-outline:hover {
+    background: var(--signal-coral);
+    color: white;
+    border-color: var(--signal-coral);
+    box-shadow: 0 7px 14px rgba(255, 119, 89, 0.3);
+    transform: translateY(-2px);
+  }
+  
+  .view-all-btn {
+    border-radius: 99px;
+    padding: 0.8rem 2rem;
+  }
+
+  .flex-1 {
+    flex: 1;
+  }
+
+  .btn-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    background: rgba(255, 119, 89, 0.1);
+    color: var(--signal-coral);
+    border-radius: var(--border-radius-sm);
+    text-decoration: none;
+    font-size: 1.35rem;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  }
+
+  .btn-icon:hover {
+    background: var(--signal-coral);
+    color: white;
+    transform: translateY(-2px) rotate(8deg);
+    box-shadow: 0 7px 14px rgba(255, 119, 89, 0.3);
+  }
+
+  .btn-primary-large {
+    display: inline-block;
+    padding: 1.1rem 2.5rem;
+    background: linear-gradient(135deg, var(--signal-coral), #ff4d4d);
+    color: white;
+    border-radius: 99px;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 1.15rem;
+    box-shadow: 0 4px 14px rgba(255, 119, 89, 0.4);
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  }
+
+  .btn-primary-large:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 8px 25px rgba(255, 119, 89, 0.5);
+  }
+
+  /* CTA Section */
+  .cta-section {
+    padding: 6rem 2rem;
+    text-align: center;
+    background: var(--tf-graphite);
+    color: white;
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--hover-shadow);
+  }
+
+  .cta-content {
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  .cta-content h2 {
+    color: white;
+    font-size: 2.5rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .cta-content p {
+    color: rgba(255,255,255,0.85);
+    font-size: 1.15rem;
+    line-height: 1.6;
+    margin-bottom: 2.5rem;
+  }
+  
+  .empty-state {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: #888;
+    padding: 3rem;
+    background: var(--apple-gray);
+    border-radius: var(--border-radius-md);
+  }
+
+  @media (max-width: 768px) {
+    .hero-section, .content-section, .cta-section {
+      padding: 3rem 1rem;
+    }
+    .hero-title {
+      font-size: 2.25rem;
+    }
+    .section-title {
+      font-size: 2rem;
+    }
+    .grid-cards, .services-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

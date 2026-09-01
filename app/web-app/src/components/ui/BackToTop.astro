@@ -1,0 +1,93 @@
+---
+// BackToTop.astro
+---
+
+<button id="backToTopBtn" class="back-to-top" aria-label="Back to Top">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 19V5M5 12l7-7 7 7"/>
+  </svg>
+</button>
+
+<style>
+  .back-to-top {
+    position: fixed;
+    bottom: clamp(15px, 3vw, 30px);
+    left: clamp(15px, 3vw, 30px);
+    width: clamp(40px, 5vw, 55px);
+    height: clamp(40px, 5vw, 55px);
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--signal-coral, #ff4d4d), #ff7676);
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(20px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 15px rgba(255, 77, 77, 0.3);
+    z-index: 999;
+  }
+
+  .back-to-top.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+
+  .back-to-top:hover {
+    transform: translateY(-5px) scale(1.05);
+    box-shadow: 0 6px 20px rgba(255, 77, 77, 0.4);
+    background: linear-gradient(135deg, #ff3333, #ff5c5c);
+  }
+
+  .back-to-top:active {
+    transform: translateY(0) scale(0.95);
+  }
+
+  .back-to-top svg {
+    width: 50%;
+    height: 50%;
+    transition: transform 0.3s ease;
+  }
+
+  .back-to-top:hover svg {
+    transform: translateY(-2px);
+  }
+  
+  /* Make sure it adapts nicely on smaller screens */
+  @media (max-width: 768px) {
+    .back-to-top {
+      box-shadow: 0 3px 10px rgba(255, 77, 77, 0.25);
+    }
+    .back-to-top:hover {
+      transform: translateY(-3px) scale(1.02);
+    }
+  }
+</style>
+
+<script>
+  // Script runs on the client to handle scroll events
+  document.addEventListener('DOMContentLoaded', () => {
+    const backToTopBtn = document.getElementById('backToTopBtn');
+    
+    if (backToTopBtn) {
+      window.addEventListener('scroll', () => {
+        if (window.scrollY > 300) {
+          backToTopBtn.classList.add('show');
+        } else {
+          backToTopBtn.classList.remove('show');
+        }
+      });
+      
+      backToTopBtn.addEventListener('click', () => {
+        window.scrollTo({
+          top: 0,
+          behavior: 'smooth'
+        });
+      });
+    }
+  });
+</script>

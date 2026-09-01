@@ -1,0 +1,296 @@
+---
+import Button from "./Button.astro";
+import { env } from "cloudflare:workers";
+
+export interface Props {
+  siteName?: string;
+}
+
+const { siteName = "Techily Fly Apps" } = Astro.props;
+
+let menuItems: any[] = [];
+try {
+  const db = env.DB;
+  if (db) {
+    // 1 is Header Menu ID
+    const result = await db.prepare(`SELECT * FROM menu_items WHERE menu_id = 1 AND status = 'active' ORDER BY display_order ASC, id ASC`).all();
+    menuItems = result.results || [];
+  }
+} catch (e) {
+  console.error("Failed to fetch menu items for Navbar", e);
+}
+
+// Build hierarchy
+const rootItems: any[] = [];
+const itemMap = new Map();
+
+// Fallback items if DB fails or empty
+if (menuItems.length === 0) {
+  rootItems.push(
+    { label: 'Home', url: 'https://techilyfly.com/', target: '_blank', children: [] },
+    { label: 'Apps', url: '/apps', target: '_self', children: [] },
+    { label: 'Web Apps', url: '/web-apps', target: '_self', children: [] },
+    { label: 'Tools', url: '/tools', target: '_self', children: [] },
+    { label: 'Services', url: '/services', target: '_self', children: [] },
+    { label: 'Contact', url: '/contact', target: '_self', children: [] }
+  );
+} else {
+  menuItems.forEach(item => {
+    item.children = [];
+    itemMap.set(item.id, item);
+  });
+  
+  menuItems.forEach(item => {
+    if (item.parent_id) {
+      const parent = itemMap.get(item.parent_id);
+      if (parent) {
+        parent.children.push(item);
+      } else {
+        rootItems.push(item);
+      }
+    } else {
+      rootItems.push(item);
+    }
+  });
+}
+---
+
+<nav class="navbar">
+  <div class="navbar-container">
+    <a href="/" class="brand">
+      <img src="/logo.png" alt={siteName} class="navbar-logo" />
+    </a>
+    
+    <button class="mobile-menu-toggle" id="mobile-menu-toggle" aria-label="Toggle navigation">
+      <i class='bx bx-menu'></i>
+    </button>
+    
+    <div class="nav-links" id="nav-links">
+      {rootItems.map((item: any) => (
+        item.children && item.children.length > 0 ? (
+          <div class="nav-dropdown">
+            <button class="nav-link dropdown-toggle" aria-haspopup="true" aria-expanded="false">
+              {item.label} <i class='bx bx-chevron-down'></i>
+            </button>
+            <div class="dropdown-menu">
+              {item.children.map((child: any) => (
+                <a href={child.url} target={child.target} rel={child.target === '_blank' ? "noopener noreferrer" : ""} class="dropdown-item">
+                  {child.label}
+                </a>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <a href={item.url} target={item.target} rel={item.target === '_blank' ? "noopener noreferrer" : ""} class="nav-link">
+            {item.label}
+          </a>
+        )
+      ))}
+    </div>
+  </div>
+</nav>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const toggleBtn = document.getElementById('mobile-menu-toggle');
+    const navLinks = document.getElementById('nav-links');
+    
+    if (toggleBtn && navLinks) {
+      toggleBtn.addEventListener('click', () => {
+        navLinks.classList.toggle('active');
+        const icon = toggleBtn.querySelector('i');
+        if (icon) {
+          if (navLinks.classList.contains('active')) {
+            icon.classList.remove('bx-menu');
+            icon.classList.add('bx-x');
+          } else {
+            icon.classList.remove('bx-x');
+            icon.classList.add('bx-menu');
+          }
+        }
+      });
+    }
+
+    // Handle mobile dropdown toggles
+    const dropdownToggles = document.querySelectorAll('.dropdown-toggle');
+    dropdownToggles.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        if (window.innerWidth <= 768) {
+          e.preventDefault();
+          const menu = btn.nextElementSibling;
+          if (menu) {
+            menu.classList.toggle('show');
+            const expanded = btn.getAttribute('aria-expanded') === 'true' || false;
+            btn.setAttribute('aria-expanded', (!expanded).toString());
+          }
+        }
+      });
+    });
+  });
+</script>
+
+<style>
+  .navbar {
+    background-color: var(--cloud-surface);
+    border-bottom: 1px solid rgba(33, 33, 33, 0.1);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  
+  .navbar-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .brand {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+  }
+  
+  .navbar-logo {
+    height: 38px;
+    width: auto;
+    object-fit: contain;
+  }
+  
+  .mobile-menu-toggle {
+    display: none;
+    background: none;
+    border: none;
+    font-size: 2rem;
+    color: var(--tf-graphite);
+    cursor: pointer;
+  }
+  
+  .nav-links {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+  }
+  
+  .nav-link {
+    color: var(--tf-graphite);
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.2s;
+    background: none;
+    border: none;
+    font-size: 1rem;
+    font-family: inherit;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0;
+  }
+  
+  .nav-link:hover {
+    color: var(--signal-coral);
+    text-decoration: none;
+  }
+
+  /* Dropdown Styles */
+  .nav-dropdown {
+    position: relative;
+  }
+
+  .dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background-color: var(--cloud-surface);
+    min-width: 200px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(33, 33, 33, 0.05);
+    border-radius: 8px;
+    padding: 0.5rem 0;
+    z-index: 100;
+    margin-top: 0.5rem;
+  }
+
+  .nav-dropdown:hover .dropdown-menu {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .dropdown-item {
+    padding: 0.75rem 1.25rem;
+    color: var(--tf-graphite);
+    text-decoration: none;
+    font-weight: 500;
+    transition: background-color 0.2s, color 0.2s;
+  }
+
+  .dropdown-item:hover {
+    background-color: rgba(255, 119, 89, 0.05);
+    color: var(--signal-coral);
+  }
+
+  @media (max-width: 768px) {
+    .mobile-menu-toggle {
+      display: block;
+    }
+    
+    .nav-links {
+      display: none; /* Hide by default */
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background-color: var(--cloud-surface);
+      flex-direction: column;
+      padding: 1rem;
+      border-bottom: 1px solid rgba(33, 33, 33, 0.1);
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      gap: 0;
+    }
+    
+    .nav-links.active {
+      display: flex;
+    }
+    
+    .nav-link, .nav-dropdown {
+      padding: 0.75rem 0;
+      width: 100%;
+      text-align: center;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+    }
+    
+    .nav-link {
+      justify-content: center;
+    }
+
+    .nav-dropdown:last-child, .nav-link:last-child {
+      border-bottom: none;
+    }
+
+    .dropdown-menu {
+      position: static;
+      box-shadow: none;
+      border: none;
+      background-color: rgba(0,0,0,0.02);
+      margin-top: 0.5rem;
+      border-radius: 4px;
+    }
+
+    .dropdown-menu.show {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .nav-dropdown:hover .dropdown-menu {
+      display: none; /* Only show on click in mobile */
+    }
+    
+    .nav-dropdown:hover .dropdown-menu.show {
+      display: flex;
+    }
+  }
+</style>

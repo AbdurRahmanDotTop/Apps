@@ -1,0 +1,40 @@
+---
+import { env } from 'cloudflare:workers';
+
+const { id } = Astro.params;
+const db = env.DB;
+
+try {
+  // Fetch the existing app
+  const app = await db.prepare("SELECT * FROM apps WHERE id = ?").bind(id).first();
+  
+  if (app) {
+    // Generate a new unique slug
+    const newSlug = `${app.slug}-copy-${Date.now()}`;
+    const newName = `${app.name} (Copy)`;
+    
+    // Insert the duplicated app
+    const result = await db.prepare(`
+        INSERT INTO apps (
+          category_id, name, slug, developer, version, logo_url, banner_url, 
+          description, requirements, play_store_link, play_store_logo, app_store_link, app_store_logo, indus_store_link, indus_store_logo, apk_download_link, apk_logo, custom_stores, is_featured, status
+        ) VALUES (
+          ?, ?, ?, ?, ?, ?, ?, 
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        )
+      `).bind(
+        app.category_id, `${app.name} (Copy)`, `${app.slug}-copy-${Math.floor(Math.random() * 1000)}`, app.developer, app.version, app.logo_url, app.banner_url,
+        app.description, app.requirements, app.play_store_link, app.play_store_logo, app.app_store_link, app.app_store_logo, app.indus_store_link, app.indus_store_logo, app.apk_download_link, app.apk_logo, app.custom_stores || '[]', app.is_featured, 'draft'
+      ).run();
+    
+    // Redirect to the edit page of the newly duplicated app
+    if (result.success) {
+      return Astro.redirect('/admin/apps');
+    }
+  }
+} catch (err) {
+  console.error("Failed to duplicate app:", err);
+}
+
+return Astro.redirect('/admin/apps?error=duplicate_failed');
+---

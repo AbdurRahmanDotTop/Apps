@@ -1,0 +1,131 @@
+---
+import { compareSync, hashSync } from 'bcrypt-ts';
+import { env } from 'cloudflare:workers';
+import PublicLayout from '../../layouts/PublicLayout.astro';
+import Button from '../../components/ui/Button.astro';
+import Card from '../../components/ui/Card.astro';
+
+let errorMsg = '';
+
+if (Astro.request.method === 'POST') {
+  try {
+    const data = await Astro.request.formData();
+    const username = data.get('username')?.toString().trim();
+    const password = data.get('password')?.toString();
+
+    if (!username || !password) {
+      errorMsg = 'Username and password are required.';
+    } else {
+      const db = env.DB;
+      const admin = await db.prepare("SELECT * FROM admins WHERE username = ?").bind(username).first();
+
+      if (admin && compareSync(password, admin.password_hash as string)) {
+        Astro.cookies.set('admin_session', 'authenticated', { 
+          path: '/', 
+          httpOnly: true, 
+          secure: import.meta.env.PROD, // true in production
+          sameSite: 'strict',
+          maxAge: 60 * 60 * 24 // 1 day
+        });
+        
+        return Astro.redirect('/admin');
+      } else {
+        errorMsg = 'Invalid username or password.';
+      }
+    }
+  } catch (err) {
+    console.error('Login error:', err);
+    errorMsg = 'An error occurred during login.';
+  }
+}
+---
+
+<PublicLayout title="Admin Login">
+  <div class="login-container">
+    <div class="login-card">
+      <Card>
+        <h1 style="text-align: center; margin-bottom: 2rem;">Admin Portal</h1>
+        
+        {errorMsg && <div class="alert alert-error">{errorMsg}</div>}
+
+        <form method="POST" class="login-form">
+          <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" required autofocus />
+          </div>
+          
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required />
+          </div>
+
+          <Button type="submit" variant="primary" class="login-btn">Log In</Button>
+        </form>
+      </Card>
+    </div>
+  </div>
+</PublicLayout>
+
+<style>
+  .login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 70vh;
+    padding: 2rem;
+  }
+  
+  .login-card {
+    width: 100%;
+    max-width: 400px;
+  }
+
+  .login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+  
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .form-group label {
+    font-weight: 600;
+  }
+  
+  .form-group input {
+    padding: 0.75rem;
+    border: 1px solid rgba(33, 33, 33, 0.2);
+    border-radius: 4px;
+    font-family: var(--font-brand);
+    font-size: 1rem;
+    background: transparent;
+    color: inherit;
+    outline: none;
+  }
+  
+  .form-group input:focus {
+    border-color: var(--signal-coral);
+  }
+  
+  .login-btn {
+    margin-top: 1rem;
+  }
+
+  .alert {
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 1.5rem;
+    font-weight: 500;
+    text-align: center;
+  }
+  
+  .alert-error {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+    border: 1px solid #ef4444;
+  }
+</style>

@@ -1,0 +1,535 @@
+---
+import PublicLayout from '../../layouts/PublicLayout.astro';
+import { env } from "cloudflare:workers";
+const db = env.DB;
+
+let apps: any[] = [];
+let categories: any[] = [];
+try {
+  const { results: appResults } = await db.prepare(`
+    SELECT apps.*, app_categories.name as category_name 
+    FROM apps 
+    LEFT JOIN app_categories ON apps.category_id = app_categories.id 
+    WHERE apps.status = 'published'
+  `).all();
+  apps = appResults;
+
+  const { results: catResults } = await db.prepare(`
+    SELECT name FROM app_categories ORDER BY name ASC
+  `).all();
+  categories = catResults;
+} catch (e) {
+  console.error("Failed to fetch data from D1", e);
+}
+
+const cleanDesc = (desc: any) => {
+  if (!desc) return '';
+  return String(desc)
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\r\n/g, ' ')
+    .replace(/\n/g, ' ')
+    .replace(/#/g, '')
+    .replace(/🌟/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+---
+
+<PublicLayout title="Apps Directory | Techily Fly" description="Explore our extensive collection of mobile applications.">
+  
+  <div class="hero-section">
+    <div class="hero-bg-glow"></div>
+    <div class="container text-center hero-content">
+      <h1 class="hero-title">Apps <span class="text-gradient">Directory</span></h1>
+      <p class="hero-subtitle">Discover our portfolio of powerful, scalable mobile applications designed for you.</p>
+      
+      <div class="search-container">
+        <div class="search-wrapper">
+          <i class='bx bx-search search-icon'></i>
+          <input type="text" id="searchInput" placeholder="Search apps..." class="search-input" />
+        </div>
+        <select class="filter-select" id="filterSelect">
+          <option value="All Categories">All Categories</option>
+          {categories.map(cat => (
+            <option value={cat.name}>{cat.name}</option>
+          ))}
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <section class="content-section">
+    <div class="container">
+      <div class="grid-cards" id="appGrid">
+        {apps.length > 0 ? (
+          apps.map(app => (
+            <a href={`/apps/${app.slug}`} class="app-card group" data-name={app.name.toLowerCase()} data-category={app.category_name || ''}>
+              <div class="badge-featured" style="background: rgba(33,33,33,0.06); color: var(--tf-graphite); font-size: 0.65rem;">
+                <i class='bx bx-category' ></i> {app.category_name || 'App'}
+              </div>
+              
+              <div class="app-card-header">
+                {app.logo_url ? (
+                  <div class="logo-wrapper">
+                    <img src={app.logo_url} alt={`${app.name} Logo`} class="app-logo" />
+                  </div>
+                ) : (
+                  <div class="logo-wrapper placeholder-logo">
+                    <i class='bx bxl-play-store'></i>
+                  </div>
+                )}
+                <div class="app-info">
+                  <h3 class="app-title">{app.name}</h3>
+                  <div class="rating">
+                    <i class='bx bxs-star'></i> {app.rating || 'N/A'}
+                  </div>
+                </div>
+              </div>
+              
+              <p class="app-desc" title={cleanDesc(app.description)}>
+                {cleanDesc(app.description).length > 110 
+                  ? cleanDesc(app.description).substring(0, 110) + '...' 
+                  : cleanDesc(app.description)}
+              </p>
+              
+              <div class="app-actions">
+                <span class="action-btn">
+                  Explore Now
+                  <i class='bx bx-right-arrow-alt'></i>
+                </span>
+              </div>
+            </a>
+          ))
+        ) : (
+          <div class="empty-state">
+            <div class="empty-icon-wrapper">
+              <i class='bx bx-mobile'></i>
+            </div>
+            <h3>No Apps Yet</h3>
+            <p>We are currently working on exciting new mobile applications. Check back soon!</p>
+          </div>
+        )}
+      </div>
+    </div>
+  </section>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const searchInput = document.getElementById('searchInput') as unknown as HTMLInputElement;
+    const filterSelect = document.getElementById('filterSelect') as unknown as HTMLSelectElement;
+    const appCards = document.querySelectorAll('.app-card');
+
+    function filterApps() {
+      if (!searchInput || !filterSelect) return;
+      
+      const searchTerm = searchInput.value.toLowerCase();
+      const category = filterSelect.value;
+
+      appCards.forEach((node) => {
+        const card = node as unknown as HTMLElement;
+        const name = card.getAttribute('data-name') || '';
+        const cardCategory = card.getAttribute('data-category') || '';
+
+        const matchesSearch = name.includes(searchTerm);
+        const matchesCategory = category === 'All Categories' || category === cardCategory;
+
+        if (matchesSearch && matchesCategory) {
+          card.style.display = 'flex';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+    }
+
+    if(searchInput && filterSelect) {
+      searchInput.addEventListener('input', filterApps);
+      filterSelect.addEventListener('change', filterApps);
+    }
+  });
+</script>
+
+<style>
+  /* Hero Section */
+  .hero-section {
+    position: relative;
+    padding: 4rem 0 3rem; 
+    overflow: hidden;
+    background-color: #ffffff;
+    border-radius: 32px;
+    margin: 1rem 1rem 2.5rem 1rem;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.02);
+  }
+  
+  .hero-bg-glow {
+    position: absolute;
+    top: -50%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80vw;
+    height: 80vw;
+    max-width: 800px;
+    max-height: 800px;
+    background: radial-gradient(circle, rgba(255, 119, 89, 0.08) 0%, rgba(255,255,255,0) 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .hero-content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .hero-title {
+    font-size: clamp(3rem, 5vw, 4.5rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    margin-bottom: 1rem;
+    color: var(--tf-graphite);
+    line-height: 1.1;
+  }
+
+  .text-gradient {
+    background: linear-gradient(135deg, var(--signal-coral), #ff4d4d);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .hero-subtitle {
+    font-size: clamp(1.1rem, 2vw, 1.25rem);
+    color: #666;
+    max-width: 600px;
+    margin: 0 auto 2.5rem;
+    line-height: 1.6;
+  }
+
+  /* Search Container */
+  .search-container {
+    width: 100%;
+    max-width: 600px;
+    margin: 0 auto;
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .search-wrapper {
+    position: relative;
+    flex: 1;
+    min-width: 250px;
+    display: flex;
+    align-items: center;
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 1.25rem;
+    font-size: 1.25rem;
+    color: #999;
+  }
+
+  .search-input, .filter-select {
+    width: 100%;
+    padding: 1rem 1.25rem 1rem 3.5rem;
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 99px;
+    font-size: 1rem;
+    font-family: inherit;
+    background: #fff;
+    color: var(--tf-graphite);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+    transition: all 0.3s ease;
+    outline: none;
+  }
+  
+  .filter-select {
+    flex: 0 0 auto;
+    width: auto;
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+  }
+
+  .search-input:focus, .filter-select:focus {
+    border-color: var(--signal-coral);
+    box-shadow: 0 4px 24px rgba(255, 119, 89, 0.15);
+  }
+
+  /* Content Section */
+  .content-section {
+    padding: 4rem 0 6rem; 
+    background-color: var(--apple-gray);
+    border-radius: 32px;
+    margin: 0 1rem 3rem 1rem;
+  }
+  
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+  }
+
+  .grid-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 2.5rem;
+  }
+
+  /* App Card */
+  .app-card {
+    background: #ffffff;
+    border-radius: 24px;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    position: relative;
+    border: 1px solid rgba(0,0,0,0.04);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow: hidden;
+  }
+  
+  .app-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    border-radius: 24px;
+    background: linear-gradient(135deg, rgba(255, 119, 89, 0.05), transparent);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+  }
+
+  .app-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+    border-color: rgba(255, 119, 89, 0.2);
+  }
+  
+  .app-card:hover::before {
+    opacity: 1;
+  }
+
+  /* Badge */
+  .badge-featured {
+    position: absolute;
+    top: 1.5rem;
+    right: 1.5rem;
+    background: rgba(255, 119, 89, 0.1);
+    color: var(--signal-coral);
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.4rem 0.8rem;
+    border-radius: 99px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    z-index: 2;
+  }
+
+  /* Card Header */
+  .app-card-header {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .logo-wrapper {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+    border: 1px solid rgba(0,0,0,0.05);
+    overflow: hidden;
+    flex-shrink: 0;
+    padding: 4px;
+  }
+
+  .app-logo {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 12px;
+  }
+  
+  .placeholder-logo {
+    background: linear-gradient(135deg, #f5f5f7, #eaeaea);
+  }
+  
+  .placeholder-logo i {
+    font-size: 24px;
+    color: #999;
+  }
+
+  .app-title {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--tf-graphite);
+    padding-right: 4.5rem; /* space for badge */
+    line-height: 1.3;
+  }
+  
+  .rating {
+    font-size: 0.85rem;
+    color: #ffa534;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* Card Content */
+  .app-desc {
+    color: #666;
+    line-height: 1.6;
+    margin-bottom: 2rem;
+    flex-grow: 1;
+    font-size: 0.95rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Card Actions */
+  .app-actions {
+    margin-top: auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  .action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem; /* Fixes arrow spacing */
+    width: 100%;
+    padding: 1rem 1.5rem;
+    background: #f8f9fa;
+    color: var(--tf-graphite);
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: all 0.3s ease;
+    border: 1px solid transparent;
+  }
+  
+  .action-btn i {
+    font-size: 1.25rem;
+    transition: transform 0.3s ease;
+  }
+
+  .app-card:hover .action-btn {
+    background: var(--tf-graphite);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(33, 33, 33, 0.2);
+  }
+  
+  .app-card:hover .action-btn i {
+    transform: translateX(4px) scale(1.1);
+  }
+
+  /* Empty State */
+  .empty-state {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 6rem 2rem;
+    background: #fff;
+    border-radius: 24px;
+    border: 1px dashed rgba(0,0,0,0.1);
+    text-align: center;
+  }
+
+  .empty-icon-wrapper {
+    width: 80px;
+    height: 80px;
+    background: var(--apple-gray);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .empty-icon-wrapper i {
+    font-size: 2.5rem;
+    color: #999;
+  }
+
+  .empty-state h3 {
+    font-size: 1.5rem;
+    color: var(--tf-graphite);
+    margin-bottom: 0.5rem;
+  }
+
+  .empty-state p {
+    color: #666;
+    max-width: 400px;
+  }
+
+  @media (max-width: 768px) {
+    .hero-section {
+      padding: 3rem 0 2rem;
+      margin: 1rem 0.5rem 1.5rem 0.5rem;
+      border-radius: 24px;
+    }
+    .content-section {
+      padding: 2.5rem 0 8rem; /* 8rem bottom padding to clear floating widgets */
+      margin: 0 0.5rem 2rem 0.5rem;
+      border-radius: 24px;
+    }
+    .grid-cards {
+      gap: 1.5rem;
+      grid-template-columns: 1fr; /* Force 1 column on small mobile */
+    }
+    .app-card {
+      padding: 1.5rem;
+    }
+    .search-container {
+      flex-direction: column;
+    }
+    .filter-select {
+      width: 100%;
+    }
+    .app-title {
+      font-size: 1.15rem;
+      padding-right: 0;
+      margin-bottom: 0.5rem;
+    }
+    .badge-featured {
+      position: relative;
+      top: auto; right: auto;
+      display: inline-flex;
+      margin-bottom: 1rem;
+      align-self: flex-start;
+    }
+    .app-card-header {
+      align-items: flex-start;
+    }
+    .logo-wrapper {
+      width: 56px;
+      height: 56px;
+    }
+  }
+</style>
+</PublicLayout>

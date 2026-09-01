@@ -1,0 +1,54 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Card from '../../../components/ui/Card.astro';
+import { env } from 'cloudflare:workers';
+
+const { id } = Astro.params;
+const db = env.DB;
+let message: any = null;
+
+try {
+  // Mark as read when opened
+  await db.prepare("UPDATE contact_messages SET status = 'read' WHERE id = ?").bind(id).run();
+  
+  // Fetch message details
+  message = await db.prepare("SELECT * FROM contact_messages WHERE id = ?").bind(id).first();
+} catch (err) {
+  console.error("Message load error:", err);
+}
+
+if (!message) {
+  return new Response(null, {
+    status: 404,
+    statusText: 'Not found'
+  });
+}
+---
+
+<AdminLayout title="View Message">
+  <div class="admin-header" style="margin-bottom: 2rem;">
+    <a href="/admin/messages" style="color: var(--text-secondary); text-decoration: none; margin-bottom: 1rem; display: inline-block;">&larr; Back to Messages</a>
+    <h1>View Message</h1>
+  </div>
+
+  <Card>
+    <div style="display: grid; gap: 1.5rem;">
+      <div style="padding-bottom: 1.5rem; border-bottom: 1px solid rgba(33,33,33,0.1);">
+        <p style="color: var(--text-secondary); margin-bottom: 0.5rem; font-size: 0.9rem;">From</p>
+        <h3 style="margin: 0;">{message.name} <span style="font-weight: normal; color: var(--text-secondary); font-size: 1rem;">({message.email})</span></h3>
+      </div>
+      
+      <div style="padding-bottom: 1.5rem; border-bottom: 1px solid rgba(33,33,33,0.1);">
+        <p style="color: var(--text-secondary); margin-bottom: 0.5rem; font-size: 0.9rem;">Subject</p>
+        <h3 style="margin: 0;">{message.subject}</h3>
+      </div>
+      
+      <div>
+        <p style="color: var(--text-secondary); margin-bottom: 0.5rem; font-size: 0.9rem;">Message ({new Date(message.created_at).toLocaleString()})</p>
+        <div style="background: rgba(33,33,33,0.03); padding: 1.5rem; border-radius: 8px; white-space: pre-wrap; line-height: 1.6;">
+          {message.message}
+        </div>
+      </div>
+    </div>
+  </Card>
+</AdminLayout>

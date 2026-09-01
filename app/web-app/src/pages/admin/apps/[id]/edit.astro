@@ -1,0 +1,332 @@
+---
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import Card from '../../../../components/ui/Card.astro';
+import Button from '../../../../components/ui/Button.astro';
+import { env } from 'cloudflare:workers';
+
+const { id } = Astro.params;
+const db = env.DB;
+let errorMsg = '';
+let app = null;
+let categories: any[] = [];
+
+try {
+  categories = (await db.prepare("SELECT * FROM app_categories").all()).results;
+  app = await db.prepare("SELECT * FROM apps WHERE id = ?").bind(id).first();
+} catch (err) {
+  console.error(err);
+}
+
+if (!app) {
+  return Astro.redirect('/admin/apps');
+}
+
+if (Astro.request.method === 'POST') {
+  try {
+    const data = await Astro.request.formData();
+    const name = data.get('name')?.toString().trim();
+    const slug = data.get('slug')?.toString().trim();
+    const category_id = data.get('category_id');
+    const developer = data.get('developer')?.toString().trim();
+    const version = data.get('version')?.toString().trim();
+    const logo_url = data.get('logo_url')?.toString().trim();
+    const banner_url = data.get('banner_url')?.toString().trim();
+    const description = data.get('description')?.toString().trim();
+    const requirements = data.get('requirements')?.toString().trim();
+    const play_store_link = data.get('play_store_link')?.toString().trim();
+    const play_store_logo = data.get('play_store_logo')?.toString().trim();
+    const app_store_link = data.get('app_store_link')?.toString().trim();
+    const app_store_logo = data.get('app_store_logo')?.toString().trim();
+    const indus_store_link = data.get('indus_store_link')?.toString().trim();
+    const indus_store_logo = data.get('indus_store_logo')?.toString().trim();
+    const apk_download_link = data.get('apk_download_link')?.toString().trim();
+    const apk_logo = data.get('apk_logo')?.toString().trim();
+    const is_featured = data.get('is_featured') === 'on' ? 1 : 0;
+    const status = data.get('status')?.toString() || 'draft';
+    const custom_stores = data.get('custom_stores')?.toString() || '[]';
+
+    // Validate Slug
+    if (!/^[a-zA-Z0-9-]+$/.test(slug)) {
+      return new Response("Invalid slug format", { status: 400 });
+    }
+
+    if (name && slug) {
+      await db.prepare(`
+        UPDATE apps SET 
+          category_id = ?, name = ?, slug = ?, developer = ?, version = ?, 
+          logo_url = ?, banner_url = ?, 
+          description = ?, requirements = ?, play_store_link = ?, play_store_logo = ?, app_store_link = ?, app_store_logo = ?, indus_store_link = ?, indus_store_logo = ?, apk_download_link = ?, apk_logo = ?, custom_stores = ?, is_featured = ?, status = ?
+        WHERE id = ?
+      `).bind(
+        category_id, name, slug, developer, version, logo_url, banner_url,
+        description, requirements, play_store_link, play_store_logo, app_store_link, app_store_logo, indus_store_link, indus_store_logo, apk_download_link, apk_logo, custom_stores, is_featured, status, id
+      ).run();
+      
+      return Astro.redirect('/admin/apps');
+    } else {
+      errorMsg = 'Name and slug are required.';
+    }
+  } catch (err: any) {
+    errorMsg = err.message || 'Error updating app.';
+  }
+}
+---
+
+<AdminLayout title={`Edit ${app.name}`}>
+  <div class="admin-header" style="margin-bottom: 2rem;">
+    <a href="/admin/apps" style="color: var(--text-secondary); text-decoration: none; margin-bottom: 1rem; display: inline-block;">&larr; Back to Apps</a>
+    <h1>Edit App</h1>
+  </div>
+
+  <Card>
+    {errorMsg && <div style="color: red; margin-bottom: 1rem;">{errorMsg}</div>}
+
+    <form method="POST" style="display: flex; flex-direction: column; gap: 1rem;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+        <div class="form-group">
+          <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">Name *</label>
+          <input type="text" name="name" value={app.name} required style="width: 100%; padding: 0.75rem; border: 1px solid rgba(33,33,33,0.2); border-radius: 4px;" />
+        </div>
+        
+        <div class="form-group">
+          <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">Slug *</label>
+          <input type="text" name="slug" value={app.slug} required style="width: 100%; padding: 0.75rem; border: 1px solid rgba(33,33,33,0.2); border-radius: 4px;" />
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+        <div class="form-group">
+          <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">Category</label>
+          <select name="category_id" style="width: 100%; padding: 0.75rem; border: 1px solid rgba(33,33,33,0.2); border-radius: 4px;">
+            {categories.map(cat => (
+              <option value={cat.id} selected={app.category_id === cat.id}>{cat.name}</option>
+            ))}
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">Developer</label>
+          <input type="text" name="developer" value={app.developer} style="width: 100%; padding: 0.75rem; border: 1px solid rgba(33,33,33,0.2); border-radius: 4px;" />
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+        <div class="form-group">
+          <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">Version</label>
+          <input type="text" name="version" value={app.version} style="width: 100%; padding: 0.75rem; border: 1px solid rgba(33,33,33,0.2); border-radius: 4px;" />
+        </div>
+
+        <div class="form-group">
+          <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">Logo URL</label>
+          <input type="text" name="logo_url" value={app.logo_url} style="width: 100%; padding: 0.75rem; border: 1px solid rgba(33,33,33,0.2); border-radius: 4px;" />
+        </div>
+
+        <div class="form-group">
+          <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">Banner URL</label>
+          <input type="text" name="banner_url" value={app.banner_url} style="width: 100%; padding: 0.75rem; border: 1px solid rgba(33,33,33,0.2); border-radius: 4px;" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">Description (Rich Text)</label>
+        <div id="editor-container" style="height: 300px; background: #fff; border-radius: 0 0 4px 4px; font-family: inherit; border: 1px solid rgba(33,33,33,0.2); border-top: none;" set:html={app.description || ''}></div>
+        <input type="hidden" id="description" name="description" value={app.description || ''} />
+      </div>
+      
+      <div class="form-group">
+        <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">Requirements</label>
+        <textarea name="requirements" rows="2" style="width: 100%; padding: 0.75rem; border: 1px solid rgba(33,33,33,0.2); border-radius: 4px;">{app.requirements}</textarea>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+        <div class="form-group">
+          <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">Play Store Link</label>
+          <input type="text" name="play_store_link" value={app.play_store_link} style="width: 100%; padding: 0.75rem; border: 1px solid rgba(33,33,33,0.2); border-radius: 4px;" />
+        </div>
+        <div class="form-group">
+          <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">Play Store Logo URL</label>
+          <input type="text" name="play_store_logo" value={app.play_store_logo} style="width: 100%; padding: 0.75rem; border: 1px solid rgba(33,33,33,0.2); border-radius: 4px;" />
+        </div>
+      </div>
+      
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+        <div class="form-group">
+          <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">App Store Link</label>
+          <input type="text" name="app_store_link" value={app.app_store_link} style="width: 100%; padding: 0.75rem; border: 1px solid rgba(33,33,33,0.2); border-radius: 4px;" />
+        </div>
+        <div class="form-group">
+          <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">App Store Logo URL</label>
+          <input type="text" name="app_store_logo" value={app.app_store_logo} style="width: 100%; padding: 0.75rem; border: 1px solid rgba(33,33,33,0.2); border-radius: 4px;" />
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+        <div class="form-group">
+          <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">Indus App Store Link</label>
+          <input type="text" name="indus_store_link" value={app.indus_store_link} style="width: 100%; padding: 0.75rem; border: 1px solid rgba(33,33,33,0.2); border-radius: 4px;" />
+        </div>
+        <div class="form-group">
+          <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">Indus App Store Logo URL</label>
+          <input type="text" name="indus_store_logo" value={app.indus_store_logo} style="width: 100%; padding: 0.75rem; border: 1px solid rgba(33,33,33,0.2); border-radius: 4px;" />
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+        <div class="form-group">
+          <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">APK Download Link</label>
+          <input type="text" name="apk_download_link" value={app.apk_download_link} style="width: 100%; padding: 0.75rem; border: 1px solid rgba(33,33,33,0.2); border-radius: 4px;" />
+        </div>
+        <div class="form-group">
+          <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">APK Logo URL</label>
+          <input type="text" name="apk_logo" value={app.apk_logo} style="width: 100%; padding: 0.75rem; border: 1px solid rgba(33,33,33,0.2); border-radius: 4px;" />
+        </div>
+      </div>
+
+      <!-- Custom Stores Section -->
+      <div class="form-group" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(33,33,33,0.1);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <label style="font-weight: 600; font-size: 1.1rem;">Custom App Stores</label>
+          <button type="button" id="add-store-btn" style="background: var(--signal-coral); color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 0.9rem;">
+            + Add Custom Store
+          </button>
+        </div>
+        <div id="custom-stores-container"></div>
+        <input type="hidden" name="custom_stores" id="custom_stores_input" value={app.custom_stores || '[]'} />
+      </div>
+
+      <div style="display: flex; gap: 2rem; align-items: center;">
+        <div class="form-group" style="display: flex; gap: 0.5rem; align-items: center;">
+          <input type="checkbox" name="is_featured" id="is_featured" checked={app.is_featured === 1} />
+          <label for="is_featured" style="font-weight: 600;">Featured App</label>
+        </div>
+
+        <div class="form-group" style="display: flex; gap: 0.5rem; align-items: center;">
+          <label style="font-weight: 600;">Status</label>
+          <select name="status" style="padding: 0.5rem; border: 1px solid rgba(33,33,33,0.2); border-radius: 4px;">
+            <option value="published" selected={app.status === 'published'}>Published</option>
+            <option value="draft" selected={app.status === 'draft'}>Draft</option>
+          </select>
+        </div>
+      </div>
+
+      <Button type="submit" variant="primary" style="margin-top: 1rem; width: fit-content;">Update App</Button>
+    </form>
+  </Card>
+<script>
+  // Dynamic Custom Stores Logic
+  let customStores = [];
+  
+  try {
+    const initialData = document.getElementById('custom_stores_input')?.value;
+    if (initialData) {
+      customStores = JSON.parse(initialData);
+    }
+  } catch(e) {
+    console.error("Failed to parse custom stores", e);
+  }
+
+  function renderCustomStores() {
+    const container = document.getElementById('custom-stores-container');
+    const input = document.getElementById('custom_stores_input');
+    if (!container || !input) return;
+
+    container.innerHTML = '';
+    
+    customStores.forEach((store, index) => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display: grid; grid-template-columns: 1fr 1.5fr 1.5fr auto; gap: 1rem; align-items: end; margin-bottom: 1rem; padding: 1rem; background: rgba(0,0,0,0.02); border-radius: 8px; border: 1px solid rgba(0,0,0,0.05);';
+      
+      row.innerHTML = `
+        <div>
+          <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Store Name</label>
+          <input type="text" class="cs-name" data-index="${index}" value="${store.name}" placeholder="e.g. Samsung Store" style="width: 100%; padding: 0.5rem; border: 1px solid rgba(33,33,33,0.2); border-radius: 4px;" required />
+        </div>
+        <div>
+          <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Store Link</label>
+          <input type="url" class="cs-url" data-index="${index}" value="${store.url}" placeholder="https://..." style="width: 100%; padding: 0.5rem; border: 1px solid rgba(33,33,33,0.2); border-radius: 4px;" required />
+        </div>
+        <div>
+          <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Logo URL (Optional)</label>
+          <input type="url" class="cs-logo" data-index="${index}" value="${store.logo_url || ''}" placeholder="https://..." style="width: 100%; padding: 0.5rem; border: 1px solid rgba(33,33,33,0.2); border-radius: 4px;" />
+        </div>
+        <div>
+          <button type="button" class="remove-store-btn" data-index="${index}" style="background: #dc2626; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;">Remove</button>
+        </div>
+      `;
+      container.appendChild(row);
+    });
+
+    // Add event listeners to newly created elements
+    document.querySelectorAll('.cs-name, .cs-url, .cs-logo').forEach(el => {
+      el.addEventListener('input', updateStoreData);
+    });
+    
+    document.querySelectorAll('.remove-store-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const idx = parseInt(e.target.getAttribute('data-index'));
+        customStores.splice(idx, 1);
+        updateInputAndRender();
+      });
+    });
+
+    input.value = JSON.stringify(customStores);
+  }
+
+  function updateStoreData(e) {
+    const idx = parseInt(e.target.getAttribute('data-index'));
+    if (e.target.classList.contains('cs-name')) customStores[idx].name = e.target.value;
+    if (e.target.classList.contains('cs-url')) customStores[idx].url = e.target.value;
+    if (e.target.classList.contains('cs-logo')) customStores[idx].logo_url = e.target.value;
+    
+    document.getElementById('custom_stores_input').value = JSON.stringify(customStores);
+  }
+
+  function updateInputAndRender() {
+    renderCustomStores();
+  }
+
+  document.getElementById('add-store-btn')?.addEventListener('click', () => {
+    customStores.push({ name: '', url: '', logo_url: '' });
+    updateInputAndRender();
+  });
+
+  // Initial render
+  renderCustomStores();
+</script>
+
+<!-- Quill Rich Text Editor -->
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+<script src="https://cdn.quilljs.com/1.3.6/quill.min.js" is:inline></script>
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', () => {
+    if (typeof Quill !== 'undefined') {
+      const quill = new Quill('#editor-container', {
+        theme: 'snow',
+        placeholder: 'Detailed description...',
+        modules: {
+          toolbar: [
+            [{ 'header': [1, 2, 3, false] }],
+            ['bold', 'italic', 'underline', 'strike'],
+            ['blockquote', 'code-block'],
+            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+            ['link', 'image', 'video'],
+            ['clean']
+          ]
+        }
+      });
+
+      const form = document.querySelector('form');
+      const descInput = document.querySelector('#description');
+      
+      if(form && descInput) {
+        form.addEventListener('submit', () => {
+          let html = quill.root.innerHTML;
+          if(html === '<p><br></p>') html = '';
+          descInput.value = html;
+        });
+      }
+    }
+  });
+</script>
+
+</AdminLayout>

@@ -1,0 +1,196 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Button from '../../components/ui/Button.astro';
+import Card from '../../components/ui/Card.astro';
+import { env } from 'cloudflare:workers';
+import { compareSync, hashSync } from 'bcrypt-ts';
+
+let successMsg = '';
+let errorMsg = '';
+const db = env.DB;
+
+// We assume ID 1 is the primary admin for now. 
+// In a full multi-user system, we would store the admin ID in the session cookie or JWT.
+const ADMIN_ID = 1;
+
+if (Astro.request.method === 'POST') {
+  try {
+    const data = await Astro.request.formData();
+    const action = data.get('action');
+
+    if (action === 'update_profile') {
+      const username = data.get('username')?.toString().trim();
+      const email = data.get('email')?.toString().trim();
+      const phone = data.get('phone')?.toString().trim();
+      
+      if (username) {
+        await db.prepare("UPDATE admins SET username = ?, email = ?, phone = ? WHERE id = ?")
+          .bind(username, email, phone, ADMIN_ID).run();
+        successMsg = 'Profile updated successfully.';
+      } else {
+        errorMsg = 'Username is required.';
+      }
+    } else if (action === 'update_password') {
+      const currentPassword = data.get('current_password')?.toString();
+      const newPassword = data.get('new_password')?.toString();
+      const confirmPassword = data.get('confirm_password')?.toString();
+      
+      const admin = await db.prepare("SELECT password_hash FROM admins WHERE id = ?").bind(ADMIN_ID).first();
+      
+      if (!admin || !compareSync(currentPassword || '', admin.password_hash as string)) {
+        errorMsg = 'Incorrect current password.';
+      } else if (newPassword !== confirmPassword) {
+        errorMsg = 'New passwords do not match.';
+      } else if (newPassword && newPassword.length < 6) {
+        errorMsg = 'New password must be at least 6 characters.';
+      } else {
+        const hash = hashSync(newPassword as string, 10);
+        await db.prepare("UPDATE admins SET password_hash = ? WHERE id = ?").bind(hash, ADMIN_ID).run();
+        successMsg = 'Password updated successfully.';
+      }
+    }
+  } catch (err) {
+    console.error('Profile update error:', err);
+    errorMsg = 'An error occurred while updating profile.';
+  }
+}
+
+// Fetch current admin data
+let admin = { username: '', email: '', phone: '' };
+try {
+  const result = await db.prepare("SELECT username, email, phone FROM admins WHERE id = ?").bind(ADMIN_ID).first();
+  if (result) admin = result as any;
+} catch (err) {
+  console.error("Failed to load admin profile", err);
+}
+---
+
+<AdminLayout title="Admin Profile">
+  <div class="admin-header">
+    <h1>Admin Profile</h1>
+  </div>
+
+  {successMsg && <div class="alert alert-success">{successMsg}</div>}
+  {errorMsg && <div class="alert alert-error">{errorMsg}</div>}
+
+  <div class="profile-grid">
+    <!-- Profile Info -->
+    <Card>
+      <h2 style="margin-bottom: 1.5rem; font-size: 1.25rem;">Personal Information</h2>
+      <form method="POST" class="profile-form">
+        <input type="hidden" name="action" value="update_profile" />
+        
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" value={admin.username} required />
+        </div>
+        
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" value={admin.email} />
+        </div>
+        
+        <div class="form-group">
+          <label for="phone">Phone</label>
+          <input type="text" id="phone" name="phone" value={admin.phone} />
+        </div>
+
+        <Button type="submit" variant="primary" style="margin-top: 1rem;">Update Profile</Button>
+      </form>
+    </Card>
+
+    <!-- Change Password -->
+    <Card>
+      <h2 style="margin-bottom: 1.5rem; font-size: 1.25rem;">Change Password</h2>
+      <form method="POST" class="profile-form">
+        <input type="hidden" name="action" value="update_password" />
+        
+        <div class="form-group">
+          <label for="current_password">Current Password</label>
+          <input type="password" id="current_password" name="current_password" required />
+        </div>
+        
+        <div class="form-group">
+          <label for="new_password">New Password</label>
+          <input type="password" id="new_password" name="new_password" required />
+        </div>
+        
+        <div class="form-group">
+          <label for="confirm_password">Confirm New Password</label>
+          <input type="password" id="confirm_password" name="confirm_password" required />
+        </div>
+
+        <Button type="submit" variant="outline" style="margin-top: 1rem;">Change Password</Button>
+      </form>
+    </Card>
+  </div>
+</AdminLayout>
+
+<style>
+  .admin-header {
+    margin-bottom: 2rem;
+  }
+  
+  .profile-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+  }
+  
+  .profile-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+  
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .form-group label {
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+  
+  .form-group input {
+    padding: 0.75rem;
+    border: 1px solid rgba(33, 33, 33, 0.2);
+    border-radius: 4px;
+    font-family: var(--font-brand);
+    font-size: 1rem;
+    background: transparent;
+    color: inherit;
+    outline: none;
+  }
+  
+  .form-group input:focus {
+    border-color: var(--signal-coral);
+  }
+
+  .alert {
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 1.5rem;
+    font-weight: 500;
+  }
+  
+  .alert-success {
+    background-color: rgba(16, 185, 129, 0.1);
+    color: #059669;
+    border: 1px solid #10b981;
+  }
+  
+  .alert-error {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+    border: 1px solid #ef4444;
+  }
+
+  @media (max-width: 768px) {
+    .profile-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

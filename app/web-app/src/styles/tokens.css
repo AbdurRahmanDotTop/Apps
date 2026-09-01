@@ -1,0 +1,14 @@
+:root {
+  --tf-graphite: #212121;
+  --signal-coral: #FF7759;
+  --cloud-surface: #FAFAFA;
+  --apple-gray: #F5F5F7;
+  --glass-border: rgba(33, 33, 33, 0.08);
+
+  --font-brand: "Manrope", sans-serif;
+  --font-mono: "Geist Mono", monospace;
+  
+  --border-radius-sm: 8px;
+  --border-radius-md: 12px;
+  --border-radius-lg: 18px;
+}

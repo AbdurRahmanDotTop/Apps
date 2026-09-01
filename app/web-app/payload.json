@@ -1,0 +1,16 @@
+{
+  "deployment_configs": {
+    "production": {
+      "d1_databases": {
+        "DB": {
+          "id": "43d1e9d0-10fa-4f64-b9af-9f06f9127121"
+        }
+      },
+      "kv_namespaces": {
+        "SESSION": {
+          "namespace_id": "1e667250da5e4d0781e98d579e2f411c"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,82 @@
+---
+import PublicLayout from '../layouts/PublicLayout.astro';
+import Button from '../components/ui/Button.astro';
+---
+
+<PublicLayout title="404: Page Not Found">
+  <section class="error-section">
+    <div class="container" style="text-align: center;">
+      <div class="error-content">
+        <h1 class="error-code">404</h1>
+        <h2 class="error-title">Oops! Page Not Found</h2>
+        <p class="error-message">
+          The page you are looking for might have been removed, had its name changed, or is temporarily unavailable.
+        </p>
+        <div class="error-actions">
+          <Button href="/" variant="primary">Return to Homepage</Button>
+          <Button href="/contact" variant="outline">Contact Support</Button>
+        </div>
+      </div>
+    </div>
+  </section>
+</PublicLayout>
+
+<style>
+  .error-section {
+    padding: 8rem 0;
+    min-height: 70vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .error-content {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 3rem;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(33, 33, 33, 0.05);
+    text-align: center;
+  }
+
+  .error-code {
+    font-size: 8rem;
+    line-height: 1;
+    margin-bottom: 1rem;
+    background: linear-gradient(135deg, var(--signal-coral), #ff3333);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .error-title {
+    font-size: 2rem;
+    margin-bottom: 1.5rem;
+    color: var(--tf-graphite);
+  }
+
+  .error-message {
+    font-size: 1.125rem;
+    color: rgba(33, 33, 33, 0.7);
+    margin-bottom: 2.5rem;
+  }
+
+  .error-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  @media (max-width: 768px) {
+    .error-code {
+      font-size: 5rem;
+    }
+    .error-title {
+      font-size: 1.5rem;
+    }
+    .error-content {
+      padding: 2rem 1.5rem;
+    }
+  }
+</style>

@@ -1,0 +1,138 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Button from '../../../components/ui/Button.astro';
+import Card from '../../../components/ui/Card.astro';
+import Badge from '../../../components/ui/Badge.astro';
+
+import { env } from "cloudflare:workers";
+const db = env.DB;
+
+let categories = [];
+try {
+  const { results } = await db.prepare(`
+    SELECT tool_categories.*, (SELECT COUNT(id) FROM tools WHERE category_id = tool_categories.id) as apps_count
+    FROM tool_categories 
+    ORDER BY name ASC
+  `).all();
+  categories = results;
+} catch (e) {
+  console.error("Failed to fetch categories for admin", e);
+}
+---
+
+<AdminLayout title="Manage Categories">
+  <div class="page-header">
+    <p>Organize tools by managing category listings and visibility.</p>
+    <Button href="/admin/tool-categories/create" variant="primary">Add New Category</Button>
+  </div>
+  
+  <div class="content-layout">
+    <div class="main-column">
+      <Card>
+        <div class="table-responsive">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Slug</th>
+                <th>Apps Count</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {categories.map(cat => (
+                <tr>
+                  <td class="font-bold">{cat.name}</td>
+                  <td><code>{cat.slug}</code></td>
+                  <td>{cat.apps_count}</td>
+                  <td>
+                    <Badge variant={cat.status === 'active' ? 'success' : 'default'}>
+                      {cat.status}
+                    </Badge>
+                  </td>
+                  <td class="actions-cell">
+                    <Button href={`/admin/tool-categories/${cat.id}/edit`} variant="outline" size="sm">Edit</Button>
+                    <form action={`/api/admin/tool-categories/${cat.id}/delete`} method="POST" class="inline-form" onsubmit="return confirm('Are you sure? Tools in this category will be preserved but uncategorized.');">
+                      <Button type="submit" variant="danger" size="sm">Delete</Button>
+                    </form>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    gap: 1rem;
+  }
+  
+  @media (max-width: 768px) {
+    .page-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+  
+  .content-layout {
+    display: grid;
+    gap: 2rem;
+  }
+  
+  .table-responsive {
+    overflow-x: auto;
+  }
+  
+  .admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+  }
+  
+  .admin-table th, .admin-table td {
+    padding: 1rem;
+    border-bottom: 1px solid rgba(33, 33, 33, 0.1);
+  }
+  
+  .admin-table th {
+    background-color: rgba(33, 33, 33, 0.03);
+    font-weight: 600;
+    color: rgba(33, 33, 33, 0.7);
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+  }
+  
+  .font-bold {
+    font-weight: 700;
+  }
+  
+  code {
+    background: rgba(33,33,33,0.05);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+  }
+  
+  .actions-cell {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  
+  .inline-form {
+    margin: 0;
+    padding: 0;
+  }
+</style>

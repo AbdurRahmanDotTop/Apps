@@ -1,0 +1,192 @@
+---
+import PublicLayout from '../../layouts/PublicLayout.astro';
+import Card from '../../components/ui/Card.astro';
+import Badge from '../../components/ui/Badge.astro';
+
+import { env } from "cloudflare:workers";
+const db = env.DB;
+
+let services: any[] = [];
+try {
+  const res = await db.prepare(`SELECT * FROM services WHERE status = 'active'`).all();
+  services = res.results || [];
+} catch (e) {
+  console.error("Failed to fetch services from D1", e);
+}
+
+const cleanDesc = (desc: any) => {
+  if (!desc) return '';
+  return String(desc).replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ').replace(/<[^>]+>/g, ' ').replace(/\r\n/g, ' ').replace(/\n/g, ' ').replace(/#/g, '').replace(/🌟/g, '').replace(/\s+/g, ' ').trim();
+};
+---
+
+<PublicLayout title="Services">
+  <div class="header">
+    <h1>Our Services</h1>
+    <p>Professional integrations and managed solutions.</p>
+  </div>
+
+  <div class="services-grid">
+    {services.map(service => (
+      <div class="service-card-wrapper">
+        <Card href={`/services/${service.slug}`} class="premium-service-card">
+          <div class="service-content">
+            <div class="service-header-row">
+              <div class="service-icon">
+                <i class={`bx ${service.icon || 'bx-briefcase-alt-2'}`}></i>
+              </div>
+              <Badge variant={service.status === 'active' ? 'success' : 'default'} class="status-badge">{service.status}</Badge>
+            </div>
+            <h3 class="service-title">{service.name}</h3>
+            <p class="service-desc" title={cleanDesc(service.description)}>{cleanDesc(service.description).length > 150 ? cleanDesc(service.description).substring(0, 150) + '...' : cleanDesc(service.description)}</p>
+            <div class="service-footer">
+              <span class="learn-more-link">Explore Solutions <i class='bx bx-right-arrow-alt'></i></span>
+            </div>
+          </div>
+        </Card>
+      </div>
+    ))}
+  </div>
+</PublicLayout>
+
+<style>
+  .header {
+    margin-bottom: 4rem;
+    text-align: center;
+    padding: 3rem 0;
+    background: linear-gradient(180deg, #ffffff 0%, var(--apple-gray, #f5f5f7) 100%);
+    border-radius: var(--border-radius-lg, 24px);
+  }
+  
+  .header h1 {
+    font-size: 3rem;
+    font-weight: 800;
+    margin-bottom: 1rem;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, var(--tf-graphite, #222), #555);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  
+  .header p {
+    font-size: 1.25rem;
+    color: rgba(33, 33, 33, 0.7);
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  
+  .services-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 2.5rem;
+  }
+  
+  .service-card-wrapper {
+    display: block;
+    height: 100%;
+  }
+
+  /* Make Card take full height and remove default padding if needed, but since we are putting stuff in card-body, we can override slightly */
+  :global(.premium-service-card) {
+    height: 100%;
+    border: 1px solid rgba(0, 0, 0, 0.04);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.03);
+    transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    background: #ffffff;
+    overflow: hidden;
+    position: relative;
+  }
+
+  :global(.premium-service-card)::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: linear-gradient(90deg, var(--signal-coral, #ff4d4d), #ff8a66);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+  }
+  
+  :global(.premium-service-card:hover) {
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+    border-color: rgba(0, 0, 0, 0.08);
+  }
+
+  :global(.premium-service-card:hover)::before {
+    transform: scaleX(1);
+  }
+
+  .service-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .service-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1.5rem;
+  }
+  
+  .service-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    background: rgba(255, 77, 77, 0.08);
+    color: var(--signal-coral, #ff4d4d);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    transition: all 0.3s ease;
+  }
+
+  :global(.premium-service-card:hover) .service-icon {
+    background: var(--signal-coral, #ff4d4d);
+    color: #ffffff;
+    transform: scale(1.05) rotate(5deg);
+  }
+
+  .service-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--tf-graphite, #222);
+    margin: 0 0 1rem 0;
+    letter-spacing: -0.02em;
+  }
+  
+  .service-desc {
+    color: rgba(33, 33, 33, 0.65);
+    line-height: 1.7;
+    margin-bottom: 2rem;
+    flex-grow: 1;
+    font-size: 1.05rem;
+  }
+
+  .service-footer {
+    margin-top: auto;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    display: flex;
+    align-items: center;
+  }
+  
+  .learn-more-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--signal-coral, #ff4d4d);
+    font-weight: 600;
+    font-size: 1rem;
+    transition: gap 0.3s ease;
+  }
+
+  :global(.premium-service-card:hover) .learn-more-link {
+    gap: 0.75rem;
+  }
+</style>

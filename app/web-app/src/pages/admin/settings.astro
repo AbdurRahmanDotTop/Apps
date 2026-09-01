@@ -1,0 +1,457 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Button from '../../components/ui/Button.astro';
+import Card from '../../components/ui/Card.astro';
+
+import { env } from "cloudflare:workers";
+const db = env.DB;
+
+let settings = {
+  site_name: "",
+  contact_email: "",
+  contact_phone: "",
+  contact_address: "",
+  social_links: "[]"
+};
+
+let successMsg = "";
+let errorMsg = "";
+
+if (Astro.request.method === 'POST') {
+  try {
+    const contentType = Astro.request.headers.get('content-type') || '';
+    let site_name = '';
+    let contact_email = '';
+    let contact_phone = '';
+    let contact_address = '';
+    let social_links = '[]';
+
+    if (contentType.includes('application/json')) {
+      const data = await Astro.request.json();
+      site_name = data.site_name || '';
+      contact_email = data.contact_email || '';
+      contact_phone = data.contact_phone || '';
+      contact_address = data.contact_address || '';
+      social_links = data.social_links || '[]';
+    } else {
+      // Fallback for native submit (just in case)
+      const data = await Astro.request.formData();
+      site_name = data.get('site_name')?.toString() || '';
+      contact_email = data.get('contact_email')?.toString() || '';
+      contact_phone = data.get('contact_phone')?.toString() || '';
+      contact_address = data.get('contact_address')?.toString() || '';
+      social_links = data.get('social_links')?.toString() || '[]';
+    }
+
+    // Check if settings exist
+    const existing = await db.prepare(`SELECT id FROM website_settings LIMIT 1`).first();
+    
+    if (existing) {
+      await db.prepare(`
+        UPDATE website_settings SET 
+          site_name = ?, contact_email = ?, contact_phone = ?, contact_address = ?,
+          social_links = ?
+        WHERE id = ?
+      `).bind(site_name, contact_email, contact_phone, contact_address, social_links, existing.id).run();
+    } else {
+      await db.prepare(`
+        INSERT INTO website_settings (
+          site_name, contact_email, contact_phone, contact_address, social_links
+        ) VALUES (?, ?, ?, ?, ?)
+      `).bind(site_name, contact_email, contact_phone, contact_address, social_links).run();
+    }
+    
+    if (contentType.includes('application/json')) {
+      return new Response(JSON.stringify({ success: true, message: "Settings updated successfully." }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+    
+    successMsg = "Settings updated successfully.";
+  } catch (err: any) {
+    console.error("Failed to update settings", err);
+    if (Astro.request.headers.get('content-type')?.includes('application/json')) {
+      return new Response(JSON.stringify({ success: false, message: err.message }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+    errorMsg = `Failed to update settings. Please try again. Error: ${err.message}`;
+  }
+}
+
+try {
+  const result = await db.prepare(`SELECT * FROM website_settings LIMIT 1`).first();
+  if (result) {
+    settings = result as any;
+    if (!settings.social_links) {
+      settings.social_links = "[]";
+    }
+  }
+} catch (e) {
+  console.error("Failed to fetch settings for admin", e);
+}
+---
+
+<AdminLayout title="Website Settings">
+  <div class="settings-container">
+    {successMsg && <div class="alert alert-success">{successMsg}</div>}
+    {errorMsg && <div class="alert alert-error">{errorMsg}</div>}
+
+    <Card title="Global Configuration">
+      <form method="POST" class="settings-form" id="settingsForm" enctype="multipart/form-data">
+        
+        <div class="form-section">
+          <h3>General Information</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="site_name">Site Name</label>
+              <input type="text" id="site_name" name="site_name" value={settings.site_name} required />
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h3>Contact Details</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="contact_email">Contact Email</label>
+              <input type="email" id="contact_email" name="contact_email" value={settings.contact_email} required />
+            </div>
+            <div class="form-group">
+              <label for="contact_phone">Contact Phone</label>
+              <input type="text" id="contact_phone" name="contact_phone" value={settings.contact_phone} />
+            </div>
+            <div class="form-group full-width">
+              <label for="contact_address">Physical Address</label>
+              <textarea id="contact_address" name="contact_address" rows="2">{settings.contact_address}</textarea>
+            </div>
+          </div>
+        </div>
+        
+        <div class="form-section">
+          <h3>Social Media Links</h3>
+          <p class="section-desc">Manage your dynamic social media links here. You can add links to Facebook, Twitter, Instagram, or any other platform.</p>
+          
+          <input type="hidden" name="social_links" id="socialLinksData" value={settings.social_links} />
+          
+          <div id="socialLinksContainer" class="social-links-container">
+            <!-- Dynamic fields will be injected here -->
+          </div>
+          
+          <button type="button" id="addSocialLinkBtn" class="btn-add-store">
+            <i class='bx bx-plus'></i> Add Social Link
+          </button>
+        </div>
+
+        <div class="form-actions">
+          <Button type="submit" variant="primary">Save Settings</Button>
+        </div>
+      </form>
+    </Card>
+  </div>
+</AdminLayout>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const socialLinksDataInput = document.getElementById('socialLinksData') as HTMLInputElement;
+    const container = document.getElementById('socialLinksContainer');
+    const addBtn = document.getElementById('addSocialLinkBtn');
+    const form = document.getElementById('settingsForm');
+    
+    let socialLinks = [];
+    try {
+      socialLinks = JSON.parse(socialLinksDataInput.value || '[]');
+    } catch (e) {
+      socialLinks = [];
+    }
+
+    function renderSocialLinks() {
+      if (!container) return;
+      container.innerHTML = '';
+      
+      if (socialLinks.length === 0) {
+        container.innerHTML = '<p class="empty-state">No social links added yet. Click the button below to add one.</p>';
+        return;
+      }
+      
+      socialLinks.forEach((link, index) => {
+        const item = document.createElement('div');
+        item.className = 'social-link-item';
+        item.innerHTML = `
+          <div class="store-header">
+            <h4>Social Link #${index + 1}</h4>
+            <button type="button" class="btn-remove" data-index="${index}" title="Remove link"><i class='bx bx-x' style="font-size: 1.5rem;"></i></button>
+          </div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Platform Name (e.g. Facebook)</label>
+              <input type="text" class="social-name" value="${link.name || ''}" placeholder="Platform Name" data-index="${index}" required />
+            </div>
+            <div class="form-group">
+              <label>Icon (Class, URL, SVG, or HTML)</label>
+              <textarea class="social-icon" placeholder="bx bxl-facebook OR <svg>...</svg>" data-index="${index}" required rows="1">${link.icon || ''}</textarea>
+            </div>
+            <div class="form-group full-width">
+              <label>Profile URL</label>
+              <input type="url" class="social-url" value="${link.url || ''}" placeholder="https://..." data-index="${index}" required />
+            </div>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+
+      // Bind remove events
+      document.querySelectorAll('.btn-remove').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const btnEl = e.currentTarget as HTMLButtonElement;
+          const idx = parseInt(btnEl.getAttribute('data-index') || '0');
+          socialLinks.splice(idx, 1);
+          renderSocialLinks();
+        });
+      });
+
+      // Bind input changes
+      document.querySelectorAll('.social-name, .social-icon, .social-url').forEach(input => {
+        input.addEventListener('change', (e) => {
+          const el = e.target as HTMLInputElement;
+          const idx = parseInt(el.getAttribute('data-index') || '0');
+          if (el.classList.contains('social-name')) socialLinks[idx].name = el.value;
+          if (el.classList.contains('social-icon')) socialLinks[idx].icon = el.value;
+          if (el.classList.contains('social-url')) socialLinks[idx].url = el.value;
+        });
+      });
+    }
+
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        socialLinks.push({ name: '', icon: '', url: '' });
+        renderSocialLinks();
+      });
+    }
+
+    if (form) {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault(); // Stop native submission
+        
+        // Force blur on active element to trigger change event just in case
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+        
+        const socialLinksStr = JSON.stringify(socialLinks);
+        socialLinksDataInput.value = socialLinksStr;
+        
+        const formData = new FormData(form as HTMLFormElement);
+        const dataObj = {
+          site_name: formData.get('site_name'),
+          contact_email: formData.get('contact_email'),
+          contact_phone: formData.get('contact_phone'),
+          contact_address: formData.get('contact_address'),
+          social_links: socialLinksStr
+        };
+
+        const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+        const originalText = submitBtn.innerText;
+        submitBtn.innerText = 'Saving...';
+        submitBtn.disabled = true;
+
+        try {
+          const res = await fetch(window.location.pathname, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(dataObj)
+          });
+          
+          const result = await res.json();
+          if (res.ok && result.success) {
+            alert('Settings updated successfully!');
+            window.location.reload();
+          } else {
+            alert('Error: ' + (result.message || 'Unknown error occurred.'));
+            submitBtn.innerText = originalText;
+            submitBtn.disabled = false;
+          }
+        } catch (error) {
+          console.error(error);
+          alert('Network or server error while updating settings.');
+          submitBtn.innerText = originalText;
+          submitBtn.disabled = false;
+        }
+      });
+    }
+
+    renderSocialLinks();
+  });
+</script>
+
+<style is:global>
+  .settings-container {
+    max-width: 800px;
+  }
+  
+  .settings-form {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+  }
+  
+  .form-section h3 {
+    font-size: 1.25rem;
+    color: var(--signal-coral);
+    border-bottom: 1px solid rgba(33, 33, 33, 0.1);
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .section-desc {
+    color: #666;
+    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+  
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .full-width {
+    grid-column: 1 / -1;
+  }
+  
+  label {
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+  
+  input, textarea {
+    padding: 0.75rem;
+    border: 1px solid rgba(33, 33, 33, 0.2);
+    border-radius: 4px;
+    font-family: var(--font-brand);
+    font-size: 1rem;
+    outline: none;
+    width: 100%;
+  }
+  
+  input:focus, textarea:focus {
+    border-color: var(--signal-coral);
+  }
+  
+  .form-actions {
+    margin-top: 1rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(33, 33, 33, 0.1);
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .alert {
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 1.5rem;
+    font-weight: 500;
+  }
+  
+  .alert-success {
+    background-color: rgba(16, 185, 129, 0.1);
+    color: #059669;
+    border: 1px solid #10b981;
+  }
+  
+  .alert-error {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+    border: 1px solid #ef4444;
+  }
+
+  /* Social Links Dynamic UI Styles */
+  .social-links-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .social-link-item {
+    background: #f8f9fa;
+    border: 1px solid rgba(0,0,0,0.05);
+    padding: 1.5rem;
+    border-radius: 8px;
+  }
+  
+  .store-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+  }
+  
+  .store-header h4 {
+    margin: 0;
+    font-size: 1rem;
+    color: #333;
+  }
+  
+  .btn-remove {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .btn-remove:hover {
+    background: #ef4444;
+    color: white;
+  }
+  
+  .btn-add-store {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: #f0f0f0;
+    border: 1px dashed #ccc;
+    padding: 0.75rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 500;
+    color: #555;
+    transition: all 0.2s;
+    width: fit-content;
+  }
+  
+  .btn-add-store:hover {
+    background: #e8e8e8;
+    color: #333;
+    border-color: #999;
+  }
+  
+  .empty-state {
+    color: #888;
+    font-style: italic;
+    text-align: center;
+    padding: 1rem;
+    background: #f9f9f9;
+    border-radius: 4px;
+  }
+</style>

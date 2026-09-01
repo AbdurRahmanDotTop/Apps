@@ -1,0 +1,134 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Button from '../../../components/ui/Button.astro';
+import Card from '../../../components/ui/Card.astro';
+import Badge from '../../../components/ui/Badge.astro';
+
+import { env } from "cloudflare:workers";
+const db = env.DB;
+
+let apps = [];
+try {
+  const { results } = await db.prepare(`
+    SELECT apps.*, app_categories.name as category 
+    FROM apps 
+    LEFT JOIN app_categories ON apps.category_id = app_categories.id 
+    ORDER BY apps.updated_at DESC
+  `).all();
+  apps = results;
+} catch (e) {
+  console.error("Failed to fetch apps for admin", e);
+}
+---
+
+<AdminLayout title="Manage Apps">
+  <div class="page-header">
+    <p>Manage application directory listings, edit details, and configure store links.</p>
+    <Button href="/admin/apps/create" variant="primary">Add New App</Button>
+  </div>
+  
+  <Card>
+    <div class="table-responsive">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Category</th>
+            <th>Status</th>
+            <th>Downloads</th>
+            <th>Last Updated</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {apps.map(app => (
+            <tr>
+              <td>{app.id}</td>
+              <td class="font-bold">{app.name}</td>
+              <td>{app.category}</td>
+              <td>
+                <Badge variant={app.status === 'published' ? 'success' : 'warning'}>
+                  {app.status}
+                </Badge>
+              </td>
+              <td>
+                <div class="font-bold">{app.downloads.toLocaleString()} Total</div>
+                <div style="font-size: 0.75rem; color: rgba(33, 33, 33, 0.6); margin-top: 0.25rem;">
+                  Play: {app.play_store_downloads || 0} | Indus: {app.indus_store_downloads || 0} <br/>
+                  App: {app.app_store_downloads || 0} | APK: {app.apk_downloads || 0}
+                </div>
+              </td>
+              <td>{new Date(app.updated_at).toLocaleDateString()}</td>
+              <td class="actions-cell">
+                <Button href={`/admin/apps/${app.id}/edit`} variant="outline" size="sm">Edit</Button>
+                <Button href={`/admin/apps/${app.id}/duplicate`} variant="outline" size="sm">Duplicate</Button>
+                <form action={`/api/admin/apps/${app.id}/delete`} method="POST" class="inline-form" onsubmit="return confirm('Are you sure you want to delete this app?');">
+                  <Button type="submit" variant="danger" size="sm">Delete</Button>
+                </form>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </Card>
+</AdminLayout>
+
+<style>
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    gap: 1rem;
+  }
+  
+  @media (max-width: 768px) {
+    .page-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+  
+  .table-responsive {
+    overflow-x: auto;
+  }
+  
+  .admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+  }
+  
+  .admin-table th, .admin-table td {
+    padding: 1rem;
+    border-bottom: 1px solid rgba(33, 33, 33, 0.1);
+  }
+  
+  .admin-table th {
+    background-color: rgba(33, 33, 33, 0.03);
+    font-weight: 600;
+    color: rgba(33, 33, 33, 0.7);
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+  }
+  
+  .font-bold {
+    font-weight: 700;
+    color: var(--tf-graphite);
+  }
+  
+  .actions-cell {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  
+  .inline-form {
+    margin: 0;
+    padding: 0;
+  }
+</style>
